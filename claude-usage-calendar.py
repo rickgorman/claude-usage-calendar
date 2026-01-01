@@ -6,13 +6,13 @@ Parses Claude Code JSONL session files and generates an HTML calendar
 visualization of token usage.
 
 Usage:
-    ./claude-usage-calendar.py                    # December 2025, Arizona time
-    ./claude-usage-calendar.py --month 11         # November 2025
-    ./claude-usage-calendar.py --year 2024        # December 2024
-    ./claude-usage-calendar.py --utc              # Use UTC instead of Arizona time
-    ./claude-usage-calendar.py --tz-offset -8     # Custom timezone (PST = -8)
-    ./claude-usage-calendar.py --no-open          # Don't open in browser
-    ./claude-usage-calendar.py --output /tmp/x.html  # Custom output path
+    ./claude-usage-calendar.py
+    ./claude-usage-calendar.py --month 11
+    ./claude-usage-calendar.py --year 2024
+    ./claude-usage-calendar.py --utc
+    ./claude-usage-calendar.py --tz-offset -8
+    ./claude-usage-calendar.py --no-open
+    ./claude-usage-calendar.py --output /tmp/x.html
 """
 
 import argparse
@@ -515,19 +515,19 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-    %(prog)s                          # December 2025, Arizona time
-    %(prog)s --month 11 --year 2025   # November 2025
-    %(prog)s --utc                    # Use UTC timezone
-    %(prog)s --tz-offset -8           # Use PST (UTC-8)
-    %(prog)s --no-open                # Generate but don't open browser
-    %(prog)s -o ~/report.html         # Custom output path
-    %(prog)s -q                       # Quiet mode (no console output)
+    %(prog)s
+    %(prog)s --month 11 --year 2025
+    %(prog)s --utc
+    %(prog)s --tz-offset -8
+    %(prog)s --no-open
+    %(prog)s -o ~/report.html
+    %(prog)s -q
 
 How it works:
     1. Scans ~/ for Claude Code session files (*.jsonl with UUID/agent patterns)
     2. Parses token usage from each message (input, output, cache read, cache create)
     3. Deduplicates by message ID, taking MAX values (handles streaming updates)
-    4. Aggregates by date in the specified timezone
+    4. Aggregates by date in your local timezone
     5. Generates a styled HTML calendar with daily/weekly/monthly breakdowns
     6. Opens the result in your default browser (unless --no-open)
 
@@ -538,7 +538,7 @@ Token types:
     - Cache Create: Tokens written to prompt cache
 
 Notes:
-    - Arizona time (UTC-7) is the default since Arizona doesn't observe DST
+    - Uses your system's local timezone by default
     - Color intensity on calendar cells reflects relative daily usage
     - Hover over day cells for visual highlighting
         """,
@@ -548,7 +548,7 @@ Notes:
     )
     parser.add_argument("--year", "-y", type=int, default=2025, help="Year, default: 2025")
     parser.add_argument(
-        "--utc", action="store_true", help="Use UTC instead of Arizona time"
+        "--utc", action="store_true", help="Use UTC instead of local time"
     )
     parser.add_argument(
         "--tz-offset",
@@ -587,9 +587,9 @@ Notes:
         else:
             tz_label = f"UTC{args.tz_offset}"
     else:
-        # Default: Arizona time (UTC-7, no DST)
-        tz = timezone(timedelta(hours=-7))
-        tz_label = "Arizona"
+        # Default: system local timezone
+        tz = datetime.now().astimezone().tzinfo
+        tz_label = datetime.now().astimezone().strftime("%Z")
 
     if not args.quiet:
         print(f"Finding JSONL files in {args.search_path}...")
