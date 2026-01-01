@@ -7,12 +7,13 @@ A standalone Python tool that generates beautiful HTML calendar visualizations o
 ## Features
 
 - **Zero dependencies** - Uses only Python standard library
+- **Three views** - Monthly calendar, Yearly overview, All Time statistics
+- **Keyboard navigation** - Press `?` for shortcuts
 - **Automatic file discovery** - Scans `~/` for Claude Code session files
 - **Deduplication** - Handles streaming updates by taking MAX values per message
 - **Timezone support** - Uses system local time by default, with UTC and custom offset options
 - **Beautiful dark theme** - Modern gradient styling with hover effects
 - **Comprehensive metrics** - Input, output, cache read, and cache creation tokens
-- **Weekly & monthly totals** - Aggregated summaries at a glance
 
 ## Requirements
 
@@ -42,7 +43,6 @@ chmod +x claude-usage-calendar.py
 
 ```bash
 ./claude-usage-calendar.py
-./claude-usage-calendar.py --month 11 --year 2025
 ./claude-usage-calendar.py --utc
 ./claude-usage-calendar.py --tz-offset -8
 ./claude-usage-calendar.py -o ~/reports/usage.html
@@ -57,7 +57,10 @@ chmod +x claude-usage-calendar.py
 2. **Parses** token usage from each message (input, output, cache read, cache create)
 3. **Deduplicates** by message ID, taking MAX values (handles streaming updates)
 4. **Aggregates** by date in your local timezone
-5. **Generates** a styled HTML calendar with daily/weekly/monthly breakdowns
+5. **Generates** an interactive HTML with three views:
+   - **Monthly** - Daily calendar with weekly totals
+   - **Yearly** - Month-by-month overview (click to drill down)
+   - **All Time** - Overall statistics and token breakdown
 6. **Opens** the result in your default browser
 
 ## Token Types
@@ -74,14 +77,12 @@ chmod +x claude-usage-calendar.py
 - **Color intensity** reflects relative daily usage (darker = low, bright cyan = high)
 - **Hover effects** on day cells for visual feedback
 - **Weekly totals** in the rightmost column
-- **Monthly summary** with breakdown by token type
-- **Animated gradient** title
+- **Summary stats** with breakdown by token type
+- **Keyboard shortcuts** - press `?` for help
 
 ## Options
 
 ```
---month, -m       Month (1-12), default: 12
---year, -y        Year, default: 2025
 --utc             Use UTC instead of local time
 --tz-offset       Custom timezone offset from UTC (e.g., -8 for PST)
 --output, -o      Output HTML file path (default: /tmp/claude_usage_calendar.html)
