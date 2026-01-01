@@ -25,7 +25,7 @@ No external packages required.
 
 ```bash
 # Clone the repo
-git clone https://github.com/yourusername/claude-usage-calendar.git
+git clone https://github.com/rickgorman/claude-usage-calendar.git
 cd claude-usage-calendar
 
 # Make executable
@@ -38,7 +38,7 @@ chmod +x claude-usage-calendar.py
 Or just download the single file:
 
 ```bash
-curl -O https://raw.githubusercontent.com/yourusername/claude-usage-calendar/main/claude-usage-calendar.py
+curl -O https://raw.githubusercontent.com/rickgorman/claude-usage-calendar/main/claude-usage-calendar.py
 chmod +x claude-usage-calendar.py
 ./claude-usage-calendar.py
 ```
