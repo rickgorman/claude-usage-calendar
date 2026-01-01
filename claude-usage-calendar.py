@@ -145,16 +145,48 @@ def format_tokens(n):
     return str(n)
 
 
-def generate_html(daily_usage, tz_label):
+def build_usage_data(daily_usage, msg_count, tz_label):
+    """Build the canonical JSON data structure from parsed usage data."""
+    dates = sorted(daily_usage.keys())
+    totals = {
+        "input_tokens": sum(d["input_tokens"] for d in daily_usage.values()),
+        "output_tokens": sum(d["output_tokens"] for d in daily_usage.values()),
+        "cache_read_input_tokens": sum(
+            d["cache_read_input_tokens"] for d in daily_usage.values()
+        ),
+        "cache_creation_input_tokens": sum(
+            d["cache_creation_input_tokens"] for d in daily_usage.values()
+        ),
+    }
+    totals["total_tokens"] = sum(totals.values())
+
+    return {
+        "timezone": tz_label,
+        "date_range": {
+            "start": dates[0] if dates else None,
+            "end": dates[-1] if dates else None,
+        },
+        "days_with_data": len(daily_usage),
+        "unique_messages": msg_count,
+        "totals": totals,
+        "daily_usage": daily_usage,
+    }
+
+
+def generate_html(usage_data):
     """Generate interactive HTML with all views."""
+    # Extract data from the canonical structure
+    daily_usage = usage_data["daily_usage"]
+    tz_label = usage_data["timezone"]
+    date_range = usage_data["date_range"]
+
     # Convert daily_usage to JSON for embedding
     daily_data_json = json.dumps(daily_usage)
 
     # Find date range
-    if daily_usage:
-        dates = sorted(daily_usage.keys())
-        min_date = dates[0]
-        max_date = dates[-1]
+    if date_range["start"]:
+        min_date = date_range["start"]
+        max_date = date_range["end"]
         min_year = int(min_date[:4])
         max_year = int(max_date[:4])
     else:
@@ -1476,6 +1508,9 @@ Notes:
         help="Path to search for JSONL files (default: ~/)",
     )
     parser.add_argument("--quiet", "-q", action="store_true", help="Suppress output")
+    parser.add_argument(
+        "--json", action="store_true", help="Output JSON data instead of HTML calendar"
+    )
 
     args = parser.parse_args()
 
@@ -1507,9 +1542,19 @@ Notes:
 
     if not args.quiet:
         print(f"Found {msg_count} unique messages across {len(daily_usage)} days")
+
+    # Build the canonical data structure
+    usage_data = build_usage_data(daily_usage, msg_count, tz_label)
+
+    # JSON output mode
+    if args.json:
+        print(json.dumps(usage_data, indent=2))
+        return
+
+    if not args.quiet:
         print("Generating interactive HTML...")
 
-    html = generate_html(daily_usage, tz_label)
+    html = generate_html(usage_data)
 
     with open(args.output, "w") as f:
         f.write(html)

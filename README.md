@@ -49,6 +49,7 @@ chmod +x claude-usage-calendar.py
 ./claude-usage-calendar.py --no-open
 ./claude-usage-calendar.py -q
 ./claude-usage-calendar.py --search-path ~/work/
+./claude-usage-calendar.py --json              # Output JSON instead of HTML
 ```
 
 ## How It Works
@@ -89,6 +90,7 @@ chmod +x claude-usage-calendar.py
 --no-open         Don't open the HTML file in browser
 --search-path     Path to search for JSONL files (default: ~/)
 --quiet, -q       Suppress console output
+--json            Output JSON data instead of HTML calendar
 ```
 
 ## Notes
