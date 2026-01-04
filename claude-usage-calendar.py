@@ -80,6 +80,7 @@ def parse_jsonl_files(files, tz):
                                 )
                                 dt_local = dt.astimezone(tz)
                                 date_key = dt_local.strftime("%Y-%m-%d")
+                                hour_key = dt_local.hour
                             except Exception:
                                 continue
 
@@ -91,6 +92,7 @@ def parse_jsonl_files(files, tz):
                             if msg_id not in message_data:
                                 message_data[msg_id] = {
                                     "date": date_key,
+                                    "hour": hour_key,
                                     "input": input_t,
                                     "output": output_t,
                                     "cache_read": cache_r,
@@ -124,14 +126,36 @@ def parse_jsonl_files(files, tz):
         }
     )
 
+    hourly_usage = defaultdict(
+        lambda: defaultdict(
+            lambda: {
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "cache_read_input_tokens": 0,
+                "cache_creation_input_tokens": 0,
+            }
+        )
+    )
+
     for msg_id, data in message_data.items():
         date_key = data["date"]
+        hour_key = data["hour"]
         daily_usage[date_key]["input_tokens"] += data["input"]
         daily_usage[date_key]["output_tokens"] += data["output"]
         daily_usage[date_key]["cache_read_input_tokens"] += data["cache_read"]
         daily_usage[date_key]["cache_creation_input_tokens"] += data["cache_create"]
 
-    return dict(daily_usage), len(message_data)
+        hourly_usage[date_key][hour_key]["input_tokens"] += data["input"]
+        hourly_usage[date_key][hour_key]["output_tokens"] += data["output"]
+        hourly_usage[date_key][hour_key]["cache_read_input_tokens"] += data["cache_read"]
+        hourly_usage[date_key][hour_key]["cache_creation_input_tokens"] += data["cache_create"]
+
+    # Convert hourly_usage nested defaultdicts to regular dicts
+    hourly_dict = {}
+    for date_key, hours in hourly_usage.items():
+        hourly_dict[date_key] = {str(h): dict(v) for h, v in hours.items()}
+
+    return dict(daily_usage), hourly_dict, len(message_data)
 
 
 def format_tokens(n):
@@ -145,7 +169,7 @@ def format_tokens(n):
     return str(n)
 
 
-def build_usage_data(daily_usage, msg_count, tz_label):
+def build_usage_data(daily_usage, hourly_usage, msg_count, tz_label):
     """Build the canonical JSON data structure from parsed usage data."""
     dates = sorted(daily_usage.keys())
     totals = {
@@ -170,6 +194,7 @@ def build_usage_data(daily_usage, msg_count, tz_label):
         "unique_messages": msg_count,
         "totals": totals,
         "daily_usage": daily_usage,
+        "hourly_usage": hourly_usage,
     }
 
 
@@ -177,11 +202,13 @@ def generate_html(usage_data):
     """Generate interactive HTML with all views."""
     # Extract data from the canonical structure
     daily_usage = usage_data["daily_usage"]
+    hourly_usage = usage_data["hourly_usage"]
     tz_label = usage_data["timezone"]
     date_range = usage_data["date_range"]
 
-    # Convert daily_usage to JSON for embedding
+    # Convert daily_usage and hourly_usage to JSON for embedding
     daily_data_json = json.dumps(daily_usage)
+    hourly_data_json = json.dumps(hourly_usage)
 
     # Find date range
     if date_range["start"]:
@@ -279,6 +306,7 @@ def generate_html(usage_data):
         .nav-tab:hover {{
             background: rgba(60, 60, 100, 0.6);
             color: #fff;
+            border-color: rgba(0, 212, 255, 0.3);
         }}
 
         .nav-tab.active {{
@@ -383,6 +411,10 @@ def generate_html(usage_data):
             transform: translateY(-2px);
             box-shadow: 0 8px 25px rgba(0, 212, 255, 0.2);
             border-color: rgba(0, 212, 255, 0.3);
+        }}
+
+        .day-cell.clickable {{
+            cursor: pointer;
         }}
 
         .day-cell.empty {{
@@ -846,6 +878,213 @@ def generate_html(usage_data):
             color: #666;
             margin-top: 8px;
         }}
+
+        /* Daily View */
+        .daily-header {{
+            text-align: center;
+            margin-bottom: 25px;
+        }}
+
+        .daily-date {{
+            font-size: 1.4rem;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 5px;
+        }}
+
+        .daily-total {{
+            font-size: 2.2rem;
+            font-weight: 700;
+            background: linear-gradient(90deg, #00d4ff, #00ff88);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }}
+
+        .hourly-chart-wrapper {{
+            display: flex;
+            background: rgba(20, 20, 40, 0.4);
+            border-radius: 12px;
+            margin-bottom: 20px;
+            padding: 20px 15px 10px 10px;
+        }}
+
+        .y-axis {{
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: flex-end;
+            padding-right: 10px;
+            padding-bottom: 28px;
+            height: 260px;
+        }}
+
+        .y-axis-label {{
+            font-size: 0.7rem;
+            color: #666;
+            font-family: monospace;
+            line-height: 1;
+        }}
+
+        .hourly-chart {{
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+            height: 260px;
+            flex: 1;
+            gap: 4px;
+            border-left: 1px solid rgba(255, 255, 255, 0.1);
+            padding-left: 10px;
+        }}
+
+        .hour-bar-container {{
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            flex: 1;
+            height: 100%;
+        }}
+
+        .hour-bar-wrapper {{
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-end;
+            flex: 1;
+            width: 100%;
+        }}
+
+        .hour-bar {{
+            width: 100%;
+            max-width: 40px;
+            min-height: 2px;
+            border-radius: 4px 4px 0 0;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+        }}
+
+        .hour-bar:hover {{
+            filter: brightness(1.2);
+            transform: scaleX(1.1);
+        }}
+
+        .hour-bar .bar-segment {{
+            width: 100%;
+            transition: all 0.3s ease;
+        }}
+
+        .hour-bar .bar-segment.input {{
+            background: #4ade80;
+            border-radius: 0;
+        }}
+
+        .hour-bar .bar-segment.output {{
+            background: #f472b6;
+        }}
+
+        .hour-bar .bar-segment.cache-read {{
+            background: #fbbf24;
+        }}
+
+        .hour-bar .bar-segment.cache-create {{
+            background: #a78bfa;
+            border-radius: 4px 4px 0 0;
+        }}
+
+        .hour-bar .bar-segment:first-child {{
+            border-radius: 0 0 4px 4px;
+        }}
+
+        .hour-bar .bar-segment:last-child {{
+            border-radius: 4px 4px 0 0;
+        }}
+
+        .hour-bar .bar-segment:only-child {{
+            border-radius: 4px;
+        }}
+
+        .hour-label {{
+            font-size: 0.7rem;
+            color: #666;
+            margin-top: 8px;
+            text-align: center;
+        }}
+
+        .hour-bar-tooltip {{
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(20, 20, 40, 0.95);
+            border: 1px solid rgba(0, 212, 255, 0.3);
+            border-radius: 8px;
+            padding: 10px 14px;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+            z-index: 100;
+            margin-bottom: 8px;
+        }}
+
+        .hour-bar:hover .hour-bar-tooltip {{
+            opacity: 1;
+        }}
+
+        .tooltip-hour {{
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 6px;
+        }}
+
+        .tooltip-total {{
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #00d4ff;
+            margin-bottom: 6px;
+        }}
+
+        .tooltip-breakdown {{
+            font-size: 0.75rem;
+            line-height: 1.5;
+        }}
+
+        .tooltip-breakdown .in-label {{ color: #4ade80; }}
+        .tooltip-breakdown .out-label {{ color: #f472b6; }}
+        .tooltip-breakdown .cache-r-label {{ color: #fbbf24; }}
+        .tooltip-breakdown .cache-c-label {{ color: #a78bfa; }}
+
+        .chart-legend {{
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }}
+
+        .legend-item {{
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.8rem;
+            color: #888;
+        }}
+
+        .legend-color {{
+            width: 12px;
+            height: 12px;
+            border-radius: 3px;
+        }}
+
+        .legend-color.input {{ background: #4ade80; }}
+        .legend-color.output {{ background: #f472b6; }}
+        .legend-color.cache-read {{ background: #fbbf24; }}
+        .legend-color.cache-create {{ background: #a78bfa; }}
     </style>
 </head>
 <body>
@@ -854,9 +1093,10 @@ def generate_html(usage_data):
         <div class="header-bar">
             <h1>Claude Code Token Usage</h1>
             <div class="nav-tabs">
-                <div class="nav-tab active" data-view="monthly">📆 Monthly</div>
+                <div class="nav-tab active" data-view="daily">📊 Daily</div>
+                <div class="nav-tab" data-view="monthly">📆 Monthly</div>
                 <div class="nav-tab" data-view="yearly">📅 Yearly</div>
-                <div class="nav-tab" data-view="alltime">📊 All Time</div>
+                <div class="nav-tab" data-view="alltime">🔢 All Time</div>
             </div>
             <div class="tz-label">{tz_label}</div>
         </div>
@@ -865,6 +1105,17 @@ def generate_html(usage_data):
             <div class="nav-arrow" id="nav-prev">◀</div>
             <div class="nav-current" id="nav-current"></div>
             <div class="nav-arrow" id="nav-next">▶</div>
+        </div>
+
+        <div class="view-content active" id="view-daily">
+            <div class="calendar">
+                <div class="daily-header" id="daily-header"></div>
+                <div class="hourly-chart-wrapper">
+                    <div class="y-axis" id="y-axis"></div>
+                    <div class="hourly-chart" id="hourly-chart"></div>
+                </div>
+                <div class="summary" id="daily-summary"></div>
+            </div>
         </div>
 
         <div class="view-content" id="view-alltime">
@@ -882,7 +1133,7 @@ def generate_html(usage_data):
             </div>
         </div>
 
-        <div class="view-content active" id="view-monthly">
+        <div class="view-content" id="view-monthly">
             <div class="calendar" id="monthly-calendar"></div>
         </div>
     </div>
@@ -893,12 +1144,13 @@ def generate_html(usage_data):
             <div class="modal-hint">press esc to close</div>
             <div class="modal-divider"></div>
             <table class="shortcut-table">
-                <tr><td><kbd>1</kbd></td><td>Monthly view</td></tr>
-                <tr><td><kbd>2</kbd></td><td>Yearly view</td></tr>
-                <tr><td><kbd>3</kbd></td><td>All Time view</td></tr>
-                <tr><td><kbd>h</kbd> / <kbd>k</kbd></td><td>Previous (month/year)</td></tr>
-                <tr><td><kbd>j</kbd> / <kbd>l</kbd></td><td>Next (month/year)</td></tr>
-                <tr><td><kbd>c</kbd></td><td>Current month</td></tr>
+                <tr><td><kbd>1</kbd></td><td>Daily view</td></tr>
+                <tr><td><kbd>2</kbd></td><td>Monthly view</td></tr>
+                <tr><td><kbd>3</kbd></td><td>Yearly view</td></tr>
+                <tr><td><kbd>4</kbd></td><td>All Time view</td></tr>
+                <tr><td><kbd>h</kbd> / <kbd>k</kbd></td><td>Previous (day/month/year)</td></tr>
+                <tr><td><kbd>j</kbd> / <kbd>l</kbd></td><td>Next (day/month/year)</td></tr>
+                <tr><td><kbd>t</kbd></td><td>Today (latest day with data)</td></tr>
                 <tr><td><kbd>?</kbd></td><td>Show this help</td></tr>
             </table>
             <div class="modal-divider"></div>
@@ -911,19 +1163,25 @@ def generate_html(usage_data):
 
     <script>
         const dailyData = {daily_data_json};
+        const hourlyData = {hourly_data_json};
         const minYear = {min_year};
         const maxYear = {max_year};
+        const minDate = '{min_date}';
+        const maxDate = '{max_date}';
         const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
                            'July', 'August', 'September', 'October', 'November', 'December'];
+        const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-        let currentView = 'alltime';
+        let currentView = 'daily';
         let currentYear = maxYear;
         let currentMonth = new Date().getMonth() + 1;
+        let currentDate = maxDate;
 
-        // Find latest month with data
+        // Find latest date/month with data
         const dates = Object.keys(dailyData).sort();
         if (dates.length > 0) {{
             const latestDate = dates[dates.length - 1];
+            currentDate = latestDate;
             currentYear = parseInt(latestDate.substring(0, 4));
             currentMonth = parseInt(latestDate.substring(5, 7));
         }}
@@ -977,6 +1235,172 @@ def generate_html(usage_data):
                 result.cache_creation_input_tokens += usage.cache_creation_input_tokens || 0;
             }}
             return result;
+        }}
+
+        function formatHour(hour) {{
+            const h = parseInt(hour);
+            if (h === 0) return '12a';
+            if (h < 12) return h + 'a';
+            if (h === 12) return '12p';
+            return (h - 12) + 'p';
+        }}
+
+        function formatHourFull(hour) {{
+            const h = parseInt(hour);
+            if (h === 0) return '12:00 AM';
+            if (h < 12) return h + ':00 AM';
+            if (h === 12) return '12:00 PM';
+            return (h - 12) + ':00 PM';
+        }}
+
+        function formatDateFull(dateStr) {{
+            const d = new Date(dateStr + 'T12:00:00');
+            const dayName = dayNames[d.getDay()];
+            const monthName = monthNames[d.getMonth()];
+            const day = d.getDate();
+            const year = d.getFullYear();
+            return `${{dayName}}, ${{monthName}} ${{day}}, ${{year}}`;
+        }}
+
+        function renderDaily() {{
+            // Update navigation
+            const dateIndex = dates.indexOf(currentDate);
+            const canPrev = dateIndex > 0;
+            const canNext = dateIndex < dates.length - 1;
+            document.getElementById('nav-prev').classList.toggle('disabled', !canPrev);
+            document.getElementById('nav-next').classList.toggle('disabled', !canNext);
+            document.getElementById('nav-current').textContent = formatDateFull(currentDate);
+
+            const dayUsage = dailyData[currentDate] || {{ input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }};
+            const dayTotal = getTotal(dayUsage);
+            const hourData = hourlyData[currentDate] || {{}};
+
+            // Find max hour for scaling
+            let maxHourTotal = 0;
+            for (let h = 0; h < 24; h++) {{
+                const hData = hourData[String(h)] || {{ input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }};
+                const hTotal = getTotal(hData);
+                if (hTotal > maxHourTotal) maxHourTotal = hTotal;
+            }}
+            if (maxHourTotal === 0) maxHourTotal = 1;
+
+            // Calculate nice Y-axis scale
+            function niceNum(range, round) {{
+                const exponent = Math.floor(Math.log10(range));
+                const fraction = range / Math.pow(10, exponent);
+                let niceFraction;
+                if (round) {{
+                    if (fraction < 1.5) niceFraction = 1;
+                    else if (fraction < 3) niceFraction = 2;
+                    else if (fraction < 7) niceFraction = 5;
+                    else niceFraction = 10;
+                }} else {{
+                    if (fraction <= 1) niceFraction = 1;
+                    else if (fraction <= 2) niceFraction = 2;
+                    else if (fraction <= 5) niceFraction = 5;
+                    else niceFraction = 10;
+                }}
+                return niceFraction * Math.pow(10, exponent);
+            }}
+
+            function formatAxisLabel(n) {{
+                if (n >= 1e9) return (n / 1e9).toFixed(n % 1e9 === 0 ? 0 : 1) + 'G';
+                if (n >= 1e6) return (n / 1e6).toFixed(n % 1e6 === 0 ? 0 : 1) + 'M';
+                if (n >= 1e3) return (n / 1e3).toFixed(n % 1e3 === 0 ? 0 : 1) + 'K';
+                return n.toString();
+            }}
+
+            const yAxisMax = niceNum(maxHourTotal, false);
+            const tickCount = 5;
+            const tickInterval = yAxisMax / (tickCount - 1);
+
+            // Build Y-axis
+            let yAxisHtml = '';
+            for (let i = tickCount - 1; i >= 0; i--) {{
+                const value = Math.round(tickInterval * i);
+                yAxisHtml += `<div class="y-axis-label">${{formatAxisLabel(value)}}</div>`;
+            }}
+            document.getElementById('y-axis').innerHTML = yAxisHtml;
+
+            // Use yAxisMax for scaling instead of maxHourTotal
+            const scaleMax = yAxisMax;
+
+            // Header
+            document.getElementById('daily-header').innerHTML = `
+                <div class="daily-total">${{formatTokens(dayTotal)}} tokens</div>
+            `;
+
+            // Build hourly chart
+            let chartHtml = '';
+            for (let h = 0; h < 24; h++) {{
+                const hData = hourData[String(h)] || {{ input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }};
+                const hTotal = getTotal(hData);
+                const heightPct = hTotal > 0 ? Math.max(2, (hTotal / scaleMax) * 100) : 0;
+
+                // Calculate segment heights proportionally
+                const inputPct = hTotal > 0 ? ((hData.input_tokens || 0) / hTotal) * heightPct : 0;
+                const outputPct = hTotal > 0 ? ((hData.output_tokens || 0) / hTotal) * heightPct : 0;
+                const cacheReadPct = hTotal > 0 ? ((hData.cache_read_input_tokens || 0) / hTotal) * heightPct : 0;
+                const cacheCreatePct = hTotal > 0 ? ((hData.cache_creation_input_tokens || 0) / hTotal) * heightPct : 0;
+
+                chartHtml += `
+                    <div class="hour-bar-container">
+                        <div class="hour-bar-wrapper">
+                            <div class="hour-bar" style="height: ${{heightPct}}%;">
+                                <div class="hour-bar-tooltip">
+                                    <div class="tooltip-hour">${{formatHourFull(h)}}</div>
+                                    <div class="tooltip-total">${{formatTokens(hTotal)}}</div>
+                                    <div class="tooltip-breakdown">
+                                        <span class="in-label">In: ${{formatTokens(hData.input_tokens || 0)}}</span><br>
+                                        <span class="out-label">Out: ${{formatTokens(hData.output_tokens || 0)}}</span><br>
+                                        <span class="cache-r-label">CR: ${{formatTokens(hData.cache_read_input_tokens || 0)}}</span><br>
+                                        <span class="cache-c-label">CC: ${{formatTokens(hData.cache_creation_input_tokens || 0)}}</span>
+                                    </div>
+                                </div>
+                                ${{cacheCreatePct > 0 ? `<div class="bar-segment cache-create" style="height: ${{(cacheCreatePct / heightPct) * 100}}%;"></div>` : ''}}
+                                ${{cacheReadPct > 0 ? `<div class="bar-segment cache-read" style="height: ${{(cacheReadPct / heightPct) * 100}}%;"></div>` : ''}}
+                                ${{outputPct > 0 ? `<div class="bar-segment output" style="height: ${{(outputPct / heightPct) * 100}}%;"></div>` : ''}}
+                                ${{inputPct > 0 ? `<div class="bar-segment input" style="height: ${{(inputPct / heightPct) * 100}}%;"></div>` : ''}}
+                            </div>
+                        </div>
+                        <div class="hour-label">${{formatHour(h)}}</div>
+                    </div>
+                `;
+            }}
+
+            document.getElementById('hourly-chart').innerHTML = chartHtml;
+
+            // Summary with legend
+            document.getElementById('daily-summary').innerHTML = `
+                <div class="chart-legend">
+                    <div class="legend-item"><div class="legend-color input"></div>Input</div>
+                    <div class="legend-item"><div class="legend-color output"></div>Output</div>
+                    <div class="legend-item"><div class="legend-color cache-read"></div>Cache Read</div>
+                    <div class="legend-item"><div class="legend-color cache-create"></div>Cache Create</div>
+                </div>
+                <div class="summary-grid" style="margin-top: 20px;">
+                    <div class="summary-item">
+                        <div class="summary-label">Input Tokens</div>
+                        <div class="summary-value input">${{formatTokens(dayUsage.input_tokens || 0)}}</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-label">Output Tokens</div>
+                        <div class="summary-value output">${{formatTokens(dayUsage.output_tokens || 0)}}</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-label">Cache Read</div>
+                        <div class="summary-value cache-read">${{formatTokens(dayUsage.cache_read_input_tokens || 0)}}</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-label">Cache Create</div>
+                        <div class="summary-value cache-create">${{formatTokens(dayUsage.cache_creation_input_tokens || 0)}}</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-label">Day Total</div>
+                        <div class="summary-value total">${{formatTokens(dayTotal)}}</div>
+                    </div>
+                </div>
+            `;
         }}
 
         function renderAllTime() {{
@@ -1153,7 +1577,7 @@ def generate_html(usage_data):
             let maxTotal = 0;
             for (let d = 1; d <= daysInMonth; d++) {{
                 const dateKey = `${{currentYear}}-${{String(currentMonth).padStart(2,'0')}}-${{String(d).padStart(2,'0')}}`;
-                const usage = dailyData[dateKey] || {{}};
+                const usage = dailyData[dateKey] || {{ input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }};
                 const total = getTotal(usage);
                 if (total > maxTotal) maxTotal = total;
             }}
@@ -1195,9 +1619,10 @@ def generate_html(usage_data):
                         const usage = dailyData[dateKey] || {{ input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }};
                         const total = getTotal(usage);
                         weekTotal += total;
+                        const hasData = dates.includes(dateKey);
 
                         html += `
-                            <div class="day-cell other-month intensity-low">
+                            <div class="day-cell other-month intensity-low${{hasData ? ' clickable' : ''}}" data-date="${{dateKey}}">
                                 <div class="day-header">
                                     <span class="day-total">${{formatTokens(total)}}</span>
                                     <span class="day-number">${{prevDay}}</span>
@@ -1216,6 +1641,7 @@ def generate_html(usage_data):
                         const usage = dailyData[dateKey] || {{ input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }};
                         const total = getTotal(usage);
                         weekTotal += total;
+                        const hasData = dates.includes(dateKey);
 
                         monthlyTotals.input_tokens += usage.input_tokens || 0;
                         monthlyTotals.output_tokens += usage.output_tokens || 0;
@@ -1226,7 +1652,7 @@ def generate_html(usage_data):
                         const intensityClass = intensity > 0 ? `intensity-${{intensity}}` : 'intensity-low';
 
                         html += `
-                            <div class="day-cell ${{intensityClass}}">
+                            <div class="day-cell ${{intensityClass}}${{hasData ? ' clickable' : ''}}" data-date="${{dateKey}}">
                                 <div class="day-header">
                                     <span class="day-total">${{formatTokens(total)}}</span>
                                     <span class="day-number">${{day}}</span>
@@ -1246,9 +1672,10 @@ def generate_html(usage_data):
                         const usage = dailyData[dateKey] || {{ input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }};
                         const total = getTotal(usage);
                         weekTotal += total;
+                        const hasData = dates.includes(dateKey);
 
                         html += `
-                            <div class="day-cell other-month intensity-low">
+                            <div class="day-cell other-month intensity-low${{hasData ? ' clickable' : ''}}" data-date="${{dateKey}}">
                                 <div class="day-header">
                                     <span class="day-total">${{formatTokens(total)}}</span>
                                     <span class="day-number">${{nextMonthDay}}</span>
@@ -1303,6 +1730,14 @@ def generate_html(usage_data):
             `;
 
             document.getElementById('monthly-calendar').innerHTML = html;
+
+            // Add click handlers for day cells
+            document.querySelectorAll('.day-cell.clickable').forEach(cell => {{
+                cell.addEventListener('click', () => {{
+                    currentDate = cell.dataset.date;
+                    switchView('daily');
+                }});
+            }});
         }}
 
         function switchView(view) {{
@@ -1324,6 +1759,9 @@ def generate_html(usage_data):
             }} else if (view === 'monthly') {{
                 subNav.style.display = 'flex';
                 renderMonthly();
+            }} else if (view === 'daily') {{
+                subNav.style.display = 'flex';
+                renderDaily();
             }}
         }}
 
@@ -1343,6 +1781,12 @@ def generate_html(usage_data):
                     currentYear--;
                 }}
                 renderMonthly();
+            }} else if (currentView === 'daily') {{
+                const dateIndex = dates.indexOf(currentDate);
+                if (dateIndex > 0) {{
+                    currentDate = dates[dateIndex - 1];
+                    renderDaily();
+                }}
             }}
         }});
 
@@ -1357,11 +1801,17 @@ def generate_html(usage_data):
                     currentYear++;
                 }}
                 renderMonthly();
+            }} else if (currentView === 'daily') {{
+                const dateIndex = dates.indexOf(currentDate);
+                if (dateIndex < dates.length - 1) {{
+                    currentDate = dates[dateIndex + 1];
+                    renderDaily();
+                }}
             }}
         }});
 
         // Initial render
-        switchView('monthly');
+        switchView('daily');
 
         // Keyboard shortcuts
         const helpModal = document.getElementById('help-modal');
@@ -1384,15 +1834,15 @@ def generate_html(usage_data):
             document.getElementById('nav-next').click();
         }}
 
-        function goToCurrentMonth() {{
-            // Reset to the latest month with data
-            const dates = Object.keys(dailyData).sort();
+        function goToToday() {{
+            // Reset to the latest date with data
             if (dates.length > 0) {{
                 const latestDate = dates[dates.length - 1];
+                currentDate = latestDate;
                 currentYear = parseInt(latestDate.substring(0, 4));
                 currentMonth = parseInt(latestDate.substring(5, 7));
             }}
-            switchView('monthly');
+            switchView('daily');
         }}
 
         document.addEventListener('keydown', (e) => {{
@@ -1413,12 +1863,15 @@ def generate_html(usage_data):
                     showHelp();
                     break;
                 case '1':
-                    switchView('monthly');
+                    switchView('daily');
                     break;
                 case '2':
-                    switchView('yearly');
+                    switchView('monthly');
                     break;
                 case '3':
+                    switchView('yearly');
+                    break;
+                case '4':
                     switchView('alltime');
                     break;
                 case 'h':
@@ -1429,8 +1882,8 @@ def generate_html(usage_data):
                 case 'l':
                     navigateNext();
                     break;
-                case 'c':
-                    goToCurrentMonth();
+                case 't':
+                    goToToday();
                     break;
             }}
         }});
@@ -1538,13 +1991,13 @@ Notes:
         print(f"Found {len(files)} files matching UUID/agent pattern")
         print("Parsing usage data...")
 
-    daily_usage, msg_count = parse_jsonl_files(files, tz)
+    daily_usage, hourly_usage, msg_count = parse_jsonl_files(files, tz)
 
     if not args.quiet:
         print(f"Found {msg_count} unique messages across {len(daily_usage)} days")
 
     # Build the canonical data structure
-    usage_data = build_usage_data(daily_usage, msg_count, tz_label)
+    usage_data = build_usage_data(daily_usage, hourly_usage, msg_count, tz_label)
 
     # JSON output mode
     if args.json:

@@ -7,7 +7,7 @@ A standalone Python tool that generates beautiful HTML calendar visualizations o
 ## Features
 
 - **Zero dependencies** - Uses only Python standard library
-- **Three views** - Monthly calendar, Yearly overview, All Time statistics
+- **Four views** - Daily hourly chart, Monthly calendar, Yearly overview, All Time statistics
 - **Keyboard navigation** - Press `?` for shortcuts
 - **Automatic file discovery** - Scans `~/` for Claude Code session files
 - **Deduplication** - Handles streaming updates by taking MAX values per message
@@ -57,8 +57,9 @@ chmod +x claude-usage-calendar.py
 1. **Scans** `~/` for Claude Code session files (`*.jsonl` with UUID/agent patterns)
 2. **Parses** token usage from each message (input, output, cache read, cache create)
 3. **Deduplicates** by message ID, taking MAX values (handles streaming updates)
-4. **Aggregates** by date in your local timezone
-5. **Generates** an interactive HTML with three views:
+4. **Aggregates** by date and hour in your local timezone
+5. **Generates** an interactive HTML with four views:
+   - **Daily** - Hourly bar chart showing usage throughout the day (default)
    - **Monthly** - Daily calendar with weekly totals
    - **Yearly** - Month-by-month overview (click to drill down)
    - **All Time** - Overall statistics and token breakdown
