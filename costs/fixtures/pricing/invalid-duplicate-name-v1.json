@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "pack_id": "fixture.loader.duplicate.v1",
+  "display_name": "First name",
+  "display_name": "Second name",
+  "currency": "USD",
+  "valuation_as_of": "2026-08-28",
+  "rates": []
+}

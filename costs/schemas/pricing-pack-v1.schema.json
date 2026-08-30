@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://claude-usage-calendar.invalid/schemas/pricing-pack-v1.schema.json",
+  "title": "Published-rate-equivalent pricing pack v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "pack_id",
+    "display_name",
+    "currency",
+    "valuation_as_of",
+    "rates"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "pack_id": {"$ref": "#/$defs/identifier"},
+    "display_name": {"$ref": "#/$defs/label"},
+    "currency": {"const": "USD"},
+    "valuation_as_of": {"$ref": "#/$defs/date"},
+    "rates": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {"$ref": "#/$defs/rate"}
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^(?!(?:__proto__|prototype|constructor)$)[^*?\\[\\]{}]+$"
+    },
+    "label": {"type": "string", "minLength": 1, "maxLength": 512},
+    "date": {"type": "string", "format": "date"},
+    "decimal": {
+      "type": "string",
+      "maxLength": 64,
+      "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,12})?$"
+    },
+    "provider": {
+      "enum": ["anthropic", "openai", "xai", "cursor"]
+    },
+    "meter": {
+      "enum": [
+        "input.uncached",
+        "input.cache_read",
+        "input.cache_write_5m",
+        "input.cache_write_1h",
+        "output"
+      ]
+    },
+    "measurement_quality": {
+      "enum": ["provider_reported", "derived", "estimated"]
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "url", "checked_at"],
+      "properties": {
+        "title": {"$ref": "#/$defs/label"},
+        "url": {"type": "string", "format": "uri", "maxLength": 2048},
+        "checked_at": {"$ref": "#/$defs/date"}
+      }
+    },
+    "rate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "model",
+        "channel",
+        "variant",
+        "service_tier",
+        "context_band",
+        "meter",
+        "valuation_date",
+        "measurement_quality",
+        "unit",
+        "price",
+        "source"
+      ],
+      "properties": {
+        "provider": {"$ref": "#/$defs/provider"},
+        "model": {"$ref": "#/$defs/identifier"},
+        "channel": {"$ref": "#/$defs/identifier"},
+        "variant": {"$ref": "#/$defs/identifier"},
+        "service_tier": {"$ref": "#/$defs/identifier"},
+        "context_band": {"$ref": "#/$defs/identifier"},
+        "meter": {"$ref": "#/$defs/meter"},
+        "valuation_date": {"$ref": "#/$defs/date"},
+        "measurement_quality": {"$ref": "#/$defs/measurement_quality"},
+        "unit": {"const": "million_tokens"},
+        "price": {"$ref": "#/$defs/decimal"},
+        "source": {"$ref": "#/$defs/source"}
+      }
+    }
+  }
+}

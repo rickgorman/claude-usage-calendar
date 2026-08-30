@@ -1,0 +1,202 @@
+{
+  "fixture_version": 1,
+  "records": [
+    {
+      "name": "uncached-read-and-output",
+      "source": {
+        "input_tokens": 100,
+        "cache_read_input_tokens": 40,
+        "output_tokens": 12
+      },
+      "expected_billable": [["input.uncached", 100], ["input.cache_read", 40], ["output", 12]],
+      "expected_unpriced": [],
+      "expected_diagnostics": []
+    },
+    {
+      "name": "native-nested-mixed-ttls",
+      "source": {
+        "input_tokens": 100,
+        "output_tokens": 5,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 10,
+          "ephemeral_1h_input_tokens": 20
+        }
+      },
+      "expected_billable": [["input.uncached", 100], ["output", 5], ["input.cache_write_5m", 10], ["input.cache_write_1h", 20]],
+      "expected_unpriced": [],
+      "expected_diagnostics": []
+    },
+    {
+      "name": "nested-detailed-equals-aggregate",
+      "source": {
+        "input_tokens": 100,
+        "output_tokens": 5,
+        "cache_creation_input_tokens": 30,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 10,
+          "ephemeral_1h_input_tokens": 20
+        }
+      },
+      "expected_billable": [["input.uncached", 100], ["output", 5], ["input.cache_write_5m", 10], ["input.cache_write_1h", 20]],
+      "expected_unpriced": [],
+      "expected_diagnostics": []
+    },
+    {
+      "name": "nested-detailed-aggregate-excess",
+      "source": {
+        "input_tokens": 100,
+        "output_tokens": 5,
+        "cache_creation_input_tokens": 35,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 10,
+          "ephemeral_1h_input_tokens": 20
+        }
+      },
+      "expected_billable": [["input.uncached", 100], ["output", 5], ["input.cache_write_5m", 10], ["input.cache_write_1h", 20]],
+      "expected_unpriced": [[null, 5, "UNKNOWN_CACHE_TTL"]],
+      "expected_diagnostics": ["UNKNOWN_CACHE_TTL"]
+    },
+    {
+      "name": "aggregate-cache-write-with-unknown-ttl",
+      "source": {
+        "input_tokens": 40,
+        "cache_read_input_tokens": 20,
+        "cache_creation_input_tokens": 10,
+        "output_tokens": 5
+      },
+      "expected_billable": [["input.uncached", 40], ["input.cache_read", 20], ["output", 5]],
+      "expected_unpriced": [[null, 10, "UNKNOWN_CACHE_TTL"]],
+      "expected_diagnostics": ["UNKNOWN_CACHE_TTL"]
+    },
+    {
+      "name": "output-includes-reasoning",
+      "source": {
+        "input_tokens": 8,
+        "output_tokens": 13,
+        "reasoning_tokens": 9
+      },
+      "expected_billable": [["input.uncached", 8], ["output", 13]],
+      "expected_unpriced": [],
+      "expected_diagnostics": []
+    },
+    {
+      "name": "missing-model",
+      "record": {"model": null},
+      "source": {
+        "input_tokens": 10,
+        "output_tokens": 4
+      },
+      "expected_billable": [],
+      "expected_unpriced": [["input.uncached", 10, "MISSING_MODEL"], ["output", 4, "MISSING_MODEL"]],
+      "expected_diagnostics": ["MISSING_MODEL", "MISSING_MODEL"]
+    },
+    {
+      "name": "missing-channel",
+      "record": {"channel": null},
+      "source": {
+        "input_tokens": 10,
+        "output_tokens": 4
+      },
+      "expected_billable": [],
+      "expected_unpriced": [["input.uncached", 10, "MISSING_CHANNEL"], ["output", 4, "MISSING_CHANNEL"]],
+      "expected_diagnostics": ["MISSING_CHANNEL", "MISSING_CHANNEL"]
+    },
+    {
+      "name": "missing-required-input",
+      "source": {
+        "cache_read_input_tokens": 2,
+        "output_tokens": 5
+      },
+      "expected_billable": [],
+      "expected_unpriced": [["input.cache_read", 2, "MALFORMED_SOURCE_RECORD"], ["output", 5, "MALFORMED_SOURCE_RECORD"]],
+      "expected_diagnostics": ["MALFORMED_SOURCE_RECORD", "MALFORMED_SOURCE_RECORD", "MALFORMED_SOURCE_RECORD"]
+    },
+    {
+      "name": "missing-required-output",
+      "source": {
+        "input_tokens": 5,
+        "cache_read_input_tokens": 2
+      },
+      "expected_billable": [],
+      "expected_unpriced": [["input.uncached", 5, "MALFORMED_SOURCE_RECORD"], ["input.cache_read", 2, "MALFORMED_SOURCE_RECORD"]],
+      "expected_diagnostics": ["MALFORMED_SOURCE_RECORD", "MALFORMED_SOURCE_RECORD", "MALFORMED_SOURCE_RECORD"]
+    },
+    {
+      "name": "malformed-native-nested-counter",
+      "source": {
+        "input_tokens": 10,
+        "output_tokens": 4,
+        "cache_creation_input_tokens": 8,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": "bad"
+        }
+      },
+      "expected_billable": [],
+      "expected_unpriced": [["input.uncached", 10, "MALFORMED_SOURCE_RECORD"], ["output", 4, "MALFORMED_SOURCE_RECORD"], [null, 8, "MALFORMED_SOURCE_RECORD"]],
+      "expected_diagnostics": ["MALFORMED_SOURCE_RECORD", "MALFORMED_SOURCE_RECORD", "MALFORMED_SOURCE_RECORD", "MALFORMED_SOURCE_RECORD"]
+    },
+    {
+      "name": "unknown-native-nested-counter",
+      "source": {
+        "input_tokens": 10,
+        "output_tokens": 4,
+        "cache_creation_input_tokens": 8,
+        "cache_creation": {
+          "future_ttl_input_tokens": 8
+        }
+      },
+      "expected_billable": [],
+      "expected_unpriced": [["input.uncached", 10, "MALFORMED_SOURCE_RECORD"], ["output", 4, "MALFORMED_SOURCE_RECORD"], [null, 8, "MALFORMED_SOURCE_RECORD"], [null, 8, "MALFORMED_SOURCE_RECORD"]],
+      "expected_diagnostics": ["MALFORMED_SOURCE_RECORD", "MALFORMED_SOURCE_RECORD", "MALFORMED_SOURCE_RECORD", "MALFORMED_SOURCE_RECORD"]
+    },
+    {
+      "name": "non-mapping-native-cache-creation",
+      "source": {
+        "input_tokens": 10,
+        "output_tokens": 4,
+        "cache_creation_input_tokens": 8,
+        "cache_creation": 8
+      },
+      "expected_billable": [],
+      "expected_unpriced": [["input.uncached", 10, "MALFORMED_SOURCE_RECORD"], ["output", 4, "MALFORMED_SOURCE_RECORD"], [null, 8, "MALFORMED_SOURCE_RECORD"]],
+      "expected_diagnostics": ["MALFORMED_SOURCE_RECORD", "MALFORMED_SOURCE_RECORD", "MALFORMED_SOURCE_RECORD", "MALFORMED_SOURCE_RECORD"]
+    },
+    {
+      "name": "top-level-detailed-write-is-not-anthropic-v1",
+      "source": {
+        "input_tokens": 10,
+        "output_tokens": 4,
+        "ephemeral_5m_input_tokens": 8
+      },
+      "expected_billable": [],
+      "expected_unpriced": [["input.uncached", 10, "MALFORMED_SOURCE_RECORD"], ["output", 4, "MALFORMED_SOURCE_RECORD"], ["input.cache_write_5m", 8, "MALFORMED_SOURCE_RECORD"]],
+      "expected_diagnostics": ["MALFORMED_SOURCE_RECORD", "MALFORMED_SOURCE_RECORD", "MALFORMED_SOURCE_RECORD", "MALFORMED_SOURCE_RECORD"]
+    },
+    {
+      "name": "aggregate-less-than-nested-details",
+      "source": {
+        "input_tokens": 10,
+        "output_tokens": 4,
+        "cache_creation_input_tokens": 25,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 10,
+          "ephemeral_1h_input_tokens": 20
+        }
+      },
+      "expected_billable": [],
+      "expected_unpriced": [["input.uncached", 10, "SEMANTICS_INCONSISTENT"], ["output", 4, "SEMANTICS_INCONSISTENT"], ["input.cache_write_5m", 10, "SEMANTICS_INCONSISTENT"], ["input.cache_write_1h", 20, "SEMANTICS_INCONSISTENT"], [null, 25, "SEMANTICS_INCONSISTENT"]],
+      "expected_diagnostics": ["SEMANTICS_INCONSISTENT", "SEMANTICS_INCONSISTENT", "SEMANTICS_INCONSISTENT", "SEMANTICS_INCONSISTENT", "SEMANTICS_INCONSISTENT"]
+    },
+    {
+      "name": "malformed-counters",
+      "source": {
+        "input_tokens": true,
+        "cache_read_input_tokens": -1,
+        "output_tokens": "5"
+      },
+      "expected_billable": [],
+      "expected_unpriced": [],
+      "expected_diagnostics": ["MALFORMED_SOURCE_RECORD", "MALFORMED_SOURCE_RECORD", "MALFORMED_SOURCE_RECORD"]
+    }
+  ]
+}

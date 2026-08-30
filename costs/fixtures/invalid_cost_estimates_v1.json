@@ -1,0 +1,36 @@
+{
+  "fixture_version": 1,
+  "base": "synthetic_ui_v1.json",
+  "cases": [
+    {
+      "name": "partial-total-is-not-null",
+      "path": "total_usd",
+      "value": "0.552651",
+      "rejected_by": "schema"
+    },
+    {
+      "name": "subtotal-does-not-equal-components",
+      "path": "priced_subtotal_usd",
+      "value": "0.552652",
+      "rejected_by": "application_invariants"
+    },
+    {
+      "name": "agent-rollup-does-not-equal-components",
+      "path": ["agents", "claude", "priced_subtotal_usd"],
+      "value": "0.000202",
+      "rejected_by": "application_invariants"
+    },
+    {
+      "name": "complete-has-unpriced-usage",
+      "path": "status",
+      "value": "complete",
+      "rejected_by": "schema"
+    },
+    {
+      "name": "reserved-dynamic-agent-key",
+      "path": "agents",
+      "rename_key": ["mystery", "__proto__"],
+      "rejected_by": "schema"
+    }
+  ]
+}

@@ -1,0 +1,180 @@
+{
+  "fixture_version": 1,
+  "description": "OpenAI/Codex semantic adapter cases only; contains no pricing data.",
+  "cases": [
+    {
+      "name": "inclusive-input-with-cache-write-and-reasoning",
+      "record": {
+        "source_record_id": "openai-inclusive",
+        "agent": "codex",
+        "provider": "openai",
+        "model": "gpt-exact-2026-08-01",
+        "channel": "codex",
+        "variant": "standard",
+        "service_tier": "priority",
+        "context_band": "standard",
+        "occurred_at": "2026-08-01T12:34:56+00:00",
+        "measurement_quality": "derived",
+        "semantics_version": "openai.inclusive-input.v1",
+        "assumptions": ["fixture assumption retained"],
+        "source": {
+          "input_tokens": 1000,
+          "cached_input_tokens": 200,
+          "cache_write_input_tokens": 100,
+          "output_tokens": 50,
+          "reasoning_output_tokens": 20
+        }
+      },
+      "billable": [["input.uncached", 700], ["input.cache_read", 200], ["output", 50]],
+      "unpriced": [[null, 100, "UNSUPPORTED_METER"]],
+      "diagnostics": ["UNSUPPORTED_METER"]
+    },
+    {
+      "name": "negative-inclusive-remainder-invalidates-whole-record",
+      "record": {
+        "source_record_id": "openai-negative",
+        "agent": "codex",
+        "provider": "openai",
+        "model": "gpt-exact-2026-08-01",
+        "channel": "codex",
+        "variant": "standard",
+        "service_tier": "default",
+        "context_band": "standard",
+        "occurred_at": "2026-08-01T12:36:00+00:00",
+        "measurement_quality": "provider_reported",
+        "semantics_version": "openai.inclusive-input.v1",
+        "assumptions": [],
+        "source": {"input_tokens": 10, "cached_input_tokens": 11, "cache_write_input_tokens": 0, "output_tokens": 2}
+      },
+      "billable": [],
+      "unpriced": [[null, 10, "SEMANTICS_INCONSISTENT"], ["input.cache_read", 11, "SEMANTICS_INCONSISTENT"], ["output", 2, "SEMANTICS_INCONSISTENT"]],
+      "diagnostics": ["SEMANTICS_INCONSISTENT"]
+    },
+    {
+      "name": "unsupported-semantics-version-preserves-visible-counters",
+      "record": {
+        "source_record_id": "openai-future-semantics",
+        "agent": "codex",
+        "provider": "openai",
+        "model": "gpt-exact-2026-08-01",
+        "channel": "codex",
+        "variant": "standard",
+        "service_tier": "default",
+        "context_band": "standard",
+        "occurred_at": "2026-08-01T12:37:00+00:00",
+        "measurement_quality": "provider_reported",
+        "semantics_version": "openai.inclusive-input.v2",
+        "assumptions": [],
+        "source": {"input_tokens": 100, "cached_input_tokens": 20, "output_tokens": 10}
+      },
+      "billable": [],
+      "unpriced": [[null, 100, "UNSUPPORTED_SEMANTICS_VERSION"], ["input.cache_read", 20, "UNSUPPORTED_SEMANTICS_VERSION"], ["output", 10, "UNSUPPORTED_SEMANTICS_VERSION"]],
+      "diagnostics": ["UNSUPPORTED_SEMANTICS_VERSION"]
+    },
+    {
+      "name": "missing-exact-service-tier-is-unpriced",
+      "record": {
+        "source_record_id": "openai-missing-tier",
+        "agent": "codex",
+        "provider": "openai",
+        "model": "gpt-exact-2026-08-01",
+        "channel": "api",
+        "variant": "standard",
+        "service_tier": null,
+        "context_band": "standard",
+        "occurred_at": "2026-08-01T12:38:00+00:00",
+        "measurement_quality": "provider_reported",
+        "semantics_version": "openai.inclusive-input.v1",
+        "assumptions": [],
+        "source": {"input_tokens": 100, "cached_input_tokens": 20, "output_tokens": 10}
+      },
+      "billable": [],
+      "unpriced": [["input.uncached", 80, "MISSING_SERVICE_TIER"], ["input.cache_read", 20, "MISSING_SERVICE_TIER"], ["output", 10, "MISSING_SERVICE_TIER"]],
+      "diagnostics": ["MISSING_SERVICE_TIER"]
+    },
+    {
+      "name": "malformed-counter-does-not-get-coerced-or-clamped",
+      "record": {
+        "source_record_id": "openai-malformed",
+        "agent": "codex",
+        "provider": "openai",
+        "model": "gpt-exact-2026-08-01",
+        "channel": "api",
+        "variant": "standard",
+        "service_tier": "default",
+        "context_band": "standard",
+        "occurred_at": "2026-08-01T12:39:00+00:00",
+        "measurement_quality": "provider_reported",
+        "semantics_version": "openai.inclusive-input.v1",
+        "assumptions": [],
+        "source": {"input_tokens": "100", "cached_input_tokens": 20, "output_tokens": 10}
+      },
+      "billable": [],
+      "unpriced": [["input.cache_read", 20, "MALFORMED_SOURCE_RECORD"], ["output", 10, "MALFORMED_SOURCE_RECORD"]],
+      "diagnostics": ["MALFORMED_SOURCE_RECORD"]
+    },
+    {
+      "name": "missing-required-input-counter-is-malformed",
+      "record": {
+        "source_record_id": "openai-missing-input",
+        "agent": "codex",
+        "provider": "openai",
+        "model": "gpt-exact-2026-08-01",
+        "channel": "api",
+        "variant": "standard",
+        "service_tier": "default",
+        "context_band": "standard",
+        "occurred_at": "2026-08-01T12:39:30+00:00",
+        "measurement_quality": "provider_reported",
+        "semantics_version": "openai.inclusive-input.v1",
+        "assumptions": [],
+        "source": {"cached_input_tokens": 20, "cache_write_input_tokens": 3, "output_tokens": 10}
+      },
+      "billable": [],
+      "unpriced": [["input.cache_read", 20, "MALFORMED_SOURCE_RECORD"], [null, 3, "MALFORMED_SOURCE_RECORD"], ["output", 10, "MALFORMED_SOURCE_RECORD"]],
+      "diagnostics": ["MALFORMED_SOURCE_RECORD"]
+    },
+    {
+      "name": "missing-required-output-counter-is-malformed",
+      "record": {
+        "source_record_id": "openai-missing-output",
+        "agent": "codex",
+        "provider": "openai",
+        "model": "gpt-exact-2026-08-01",
+        "channel": "api",
+        "variant": "standard",
+        "service_tier": "default",
+        "context_band": "standard",
+        "occurred_at": "2026-08-01T12:39:45+00:00",
+        "measurement_quality": "provider_reported",
+        "semantics_version": "openai.inclusive-input.v1",
+        "assumptions": [],
+        "source": {"input_tokens": 100, "cached_input_tokens": 20, "cache_write_input_tokens": 3}
+      },
+      "billable": [],
+      "unpriced": [[null, 100, "MALFORMED_SOURCE_RECORD"], ["input.cache_read", 20, "MALFORMED_SOURCE_RECORD"], [null, 3, "MALFORMED_SOURCE_RECORD"]],
+      "diagnostics": ["MALFORMED_SOURCE_RECORD"]
+    },
+    {
+      "name": "reasoning-equal-to-output-is-not-double-counted",
+      "record": {
+        "source_record_id": "openai-reasoning",
+        "agent": "codex",
+        "provider": "openai",
+        "model": "o-exact-2026-08-01",
+        "channel": "api",
+        "variant": "standard",
+        "service_tier": "default",
+        "context_band": "standard",
+        "occurred_at": "2026-08-01T12:40:00+00:00",
+        "measurement_quality": "provider_reported",
+        "semantics_version": "openai.inclusive-input.v1",
+        "assumptions": [],
+        "source": {"input_tokens": 25, "cached_input_tokens": 0, "output_tokens": 12, "reasoning_output_tokens": 12}
+      },
+      "billable": [["input.uncached", 25], ["output", 12]],
+      "unpriced": [],
+      "diagnostics": []
+    }
+  ]
+}

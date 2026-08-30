@@ -1,0 +1,32 @@
+{
+  "fixture_version": 1,
+  "description": "Bounded deterministic mutations applied to synthetic_pricing_pack_v1.json.",
+  "cases": [
+    {"name": "unknown_root_field", "operation": "set", "path": ["unexpected"], "value": true, "schema_rejects": true},
+    {"name": "unknown_rate_field", "operation": "set", "path": ["rates", 0, "unexpected"], "value": true, "schema_rejects": true},
+    {"name": "unknown_version", "operation": "set", "path": ["schema_version"], "value": 2, "schema_rejects": true},
+    {"name": "unknown_currency", "operation": "set", "path": ["currency"], "value": "EUR", "schema_rejects": true},
+    {"name": "unknown_provider", "operation": "set", "path": ["rates", 0, "provider"], "value": "future_provider", "schema_rejects": true},
+    {"name": "numeric_price", "operation": "set", "path": ["rates", 0, "price"], "value": 3.5, "schema_rejects": true},
+    {"name": "negative_price", "operation": "set", "path": ["rates", 0, "price"], "value": "-0.1", "schema_rejects": true},
+    {"name": "excess_scale_price", "operation": "set", "path": ["rates", 0, "price"], "value": "0.1234567890123", "schema_rejects": true},
+    {"name": "excess_price_digits", "operation": "set", "path": ["rates", 0, "price"], "value": "99999999999999999999999999999999999999999999999999999999999999999", "schema_rejects": true},
+    {"name": "excess_integer_digits", "operation": "set", "path": ["schema_version"], "value": 99999999999999999, "schema_rejects": true},
+    {"name": "prototype_root_key", "operation": "set", "path": ["__proto__"], "value": {"polluted": true}, "schema_rejects": true},
+    {"name": "prototype_nested_key", "operation": "set", "path": ["rates", 0, "source", "constructor"], "value": {"prototype": {"polluted": true}}, "schema_rejects": true},
+    {"name": "prototype_pack_id", "operation": "set", "path": ["pack_id"], "value": "__proto__", "schema_rejects": true},
+    {"name": "constructor_model", "operation": "set", "path": ["rates", 0, "model"], "value": "constructor", "schema_rejects": true},
+    {"name": "prototype_channel", "operation": "set", "path": ["rates", 0, "channel"], "value": "prototype", "schema_rejects": true},
+    {"name": "wildcard_star", "operation": "set", "path": ["rates", 0, "model"], "value": "model-*", "schema_rejects": true},
+    {"name": "wildcard_question", "operation": "set", "path": ["rates", 0, "model"], "value": "model-?", "schema_rejects": true},
+    {"name": "regex_character_class", "operation": "set", "path": ["rates", 0, "model"], "value": "model-[0-9]+", "schema_rejects": true},
+    {"name": "oversized_identifier", "operation": "repeat", "path": ["rates", 0, "model"], "value": "m", "count": 257, "schema_rejects": true},
+    {"name": "overlapping_rate_key", "operation": "duplicate_rate", "index": 0, "schema_rejects": false},
+    {"name": "spoofed_provenance_kind", "operation": "set", "path": ["kind"], "value": "builtin", "schema_rejects": true},
+    {"name": "spoofed_provenance_hash", "operation": "set", "path": ["sha256"], "value": "0000000000000000000000000000000000000000000000000000000000000000", "schema_rejects": true},
+    {"name": "spoofed_local_path", "operation": "set", "path": ["path"], "value": "/private/prices.json", "schema_rejects": true},
+    {"name": "excess_depth", "operation": "nested_unknown", "depth": 80, "schema_rejects": true},
+    {"name": "excess_cardinality", "operation": "rate_cardinality", "count": 10001, "schema_rejects": true},
+    {"name": "excess_bytes", "operation": "padding", "count": 10485760, "schema_rejects": true}
+  ]
+}

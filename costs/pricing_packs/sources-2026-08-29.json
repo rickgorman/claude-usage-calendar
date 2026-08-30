@@ -1,0 +1,96 @@
+{
+  "pack_id": "builtin.2026-08-29",
+  "valuation_as_of": "2026-08-29",
+  "sources": [
+    {
+      "id": "openrouter-model-catalog",
+      "title": "OpenRouter public model catalog",
+      "url": "https://openrouter.ai/api/v1/models",
+      "checked_at": "2026-08-29",
+      "sha256": "9a3101cadba647c7fe2d086d2c752e55e494fc7b3d50c77bcb7657904f65850c",
+      "scope": "Offline capture of exact model IDs and published prompt/completion/cache-read prices for local OpenAI, Anthropic, and xAI API-equivalent cards."
+    },
+    {
+      "id": "anthropic-api-pricing",
+      "title": "Anthropic API pricing",
+      "url": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "checked_at": "2026-08-29",
+      "sha256": "d19b0909dc2b04643e35a5adbf25d44f7c33c116596df9fe66d362075a7529f9",
+      "scope": "Official model rates, cache-write TTL multipliers, cache hits, output, and Claude Opus 4.8 API rates."
+    },
+    {
+      "id": "anthropic-model-overview",
+      "title": "Anthropic models overview",
+      "url": "https://platform.claude.com/docs/en/models/overview",
+      "checked_at": "2026-08-29",
+      "sha256": "1b933b7ce4da0a61b65ae8485ca64e7788c922caa5f909eb9c0f7c124390f92e",
+      "scope": "Cross-check of exact Anthropic API model identifiers."
+    },
+    {
+      "id": "anthropic-prompt-caching",
+      "title": "Anthropic prompt caching",
+      "url": "https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching",
+      "checked_at": "2026-08-29",
+      "sha256": "9d65165b1985c3dd7cf474740da48aa5f767657e524757f05287c6ac9cf352bd",
+      "scope": "Confirms distinct 5-minute and 1-hour cache-write semantics."
+    },
+    {
+      "id": "openai-api-pricing",
+      "title": "OpenAI API pricing",
+      "url": "https://developers.openai.com/api/docs/pricing",
+      "checked_at": "2026-08-29",
+      "sha256": "e1975d9c39f1a0880ab9d7375081679f2edc2331050f1b9ae518a311fafea938",
+      "scope": "Official gpt-5.3-codex API input, cached-input, and output rates."
+    },
+    {
+      "id": "openai-codex-models",
+      "title": "OpenAI Codex models",
+      "url": "https://developers.openai.com/codex/models",
+      "checked_at": "2026-08-29",
+      "sha256": "2d0aa6b546ae0bee15e432bfda5b0a933f5e80bfe175a468fc6f4578c9d7f714",
+      "scope": "Cross-check of the exact gpt-5.3-codex identifier and API-vs-credit distinction."
+    },
+    {
+      "id": "xai-api-pricing",
+      "title": "xAI API pricing",
+      "url": "https://docs.x.ai/developers/pricing",
+      "checked_at": "2026-08-29",
+      "sha256": "0ed75315b1a401385eb6c737cc6456ae412bf0c65c2e9c1008160582b7180670",
+      "scope": "Official Grok API input, cached-input, and output rates."
+    },
+    {
+      "id": "xai-document-index",
+      "title": "xAI documentation index",
+      "url": "https://docs.x.ai/llms.txt",
+      "checked_at": "2026-08-29",
+      "sha256": "f8b4eb4912d5fb1a575c343187bc73dba0a7bbecdc8f7ec9f1b86d2111b80017",
+      "scope": "Cross-check of current Grok model identifiers and pricing documentation."
+    },
+    {
+      "id": "cursor-composer-2-5",
+      "title": "Cursor Composer 2.5 changelog",
+      "url": "https://cursor.com/changelog/composer-2-5",
+      "checked_at": "2026-08-29",
+      "sha256": "293b3cfb3b3890266c35c3e7082bb4350e564fe41f6845e5136063f27f5864c2",
+      "scope": "Explicitly publishes Standard $0.50/$2.50 and Fast (default) $3/$15 per million input/output tokens."
+    }
+  ],
+  "assumptions": [
+    "Subscription-channel Anthropic and OpenAI cards are API-equivalent snapshot valuations; subscription credits, discounts, and invoices are not represented.",
+    "OpenRouter model IDs are cross-checked against the local catalog capture; its per-token USD values are converted to per-million-token decimal strings without floating-point arithmetic.",
+    "Anthropic Claude Opus 4.8 local spelling claude-opus-4-8 is an explicit normalized model identifier; its rates are cross-checked against the official Anthropic Claude Opus 4.8 row and OpenRouter catalog alias claude-opus-4.8.",
+    "grok-4.5-build and grok-4.6-build are exact local aliases valued from their corresponding Grok API/OpenRouter models; they are derived, standard-context subscription cards only.",
+    "Composer local-transcript counters are reconstructed estimates (approximately four characters per token in the adapter), while Composer 2.5 prices are published model-token equivalents. Fast is the default variant.",
+    "A provider-reported and derived card may coexist for one exact non-quality key because measurement quality is part of RateKey; this is intentional for merge behavior.",
+    "Claude local subscription records use service_tier=standard; explicit standard-tier cards are separate from the API/default cards and preserve that source dimension.",
+    "Claude Opus 4.6 and Sonnet 4.6 use the official standard API rows ($5/$25 and $3/$15, respectively) with the documented 1.25x/2x cache-write and 0.1x cache-read multipliers; OpenRouter exact model entries cross-check those values."
+  ],
+  "excluded_coverage": [
+    "Generic gpt-5.6, codex-auto-review, and unknown/prefix/wildcard model IDs are omitted and remain unpriced.",
+    "OpenAI models other than the exact gpt-5.3-codex, gpt-5.6-sol, gpt-5.6-terra, gpt-5.6-luna, gpt-5.5, and gpt-5.4 cards are omitted.",
+    "Unsupported OpenAI cache-write charges, Anthropic unknown-TTL cache writes, and xAI long-context build aliases remain unpriced.",
+    "Anthropic model IDs outside the explicit snapshot list, including retired/provider-specific deployments, remain unpriced.",
+    "Cursor cloud-agent and third-party billing channels are omitted; only exact Composer 2.5 local-transcript standard/fast cards are included.",
+    "No discounts, credits, taxes, contracts, platform fees, tool charges, or historical spend are represented."
+  ]
+}

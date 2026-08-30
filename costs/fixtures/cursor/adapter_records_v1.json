@@ -1,0 +1,102 @@
+{
+  "fixture_version": 1,
+  "description": "Synthetic Cursor/Composer adapter source records only; no provider pricing is asserted.",
+  "records": [
+    {
+      "source_record_id": "cloud-standard-explicit-first-party", "agent": "composer", "provider": "cursor",
+      "model": "composer-2.5", "channel": "cursor-first-party", "variant": "standard", "service_tier": "first-party", "context_band": "standard",
+      "occurred_at": "2026-08-28T12:00:00+00:00", "measurement_quality": "provider_reported", "semantics_version": "cursor.cloud-agent-run.v1", "assumptions": [],
+      "source": {"selection": "explicit", "runs": [{"usage": {"inputTokens": 100, "cacheReadTokens": 20, "cacheWriteTokens": 7, "outputTokens": 30, "chargedCents": 25}}]}
+    },
+    {
+      "source_record_id": "cloud-fast-auto-third-party", "agent": "composer", "provider": "cursor",
+      "model": "Auto", "channel": "cursor-third-party", "variant": "fast", "service_tier": "third-party", "context_band": "standard",
+      "occurred_at": "2026-08-28T12:01:00+00:00", "measurement_quality": "derived", "semantics_version": "cursor.cloud-agent-run.v1", "assumptions": ["provider summary split into token components"],
+      "source": {"selection": "Auto", "routed_model": "gpt-5.3-codex", "runs": [{"usage": {"inputTokens": 80, "outputTokens": 40}}]}
+    },
+    {
+      "source_record_id": "subscription-derived-explicit", "agent": "composer", "provider": "cursor",
+      "model": "composer-2.5", "channel": "subscription-derived", "variant": "standard", "service_tier": "subscription", "context_band": "standard",
+      "occurred_at": "2026-08-28T12:02:00+00:00", "measurement_quality": "derived", "semantics_version": "cursor.cloud-agent-run.v1", "assumptions": ["subscription usage reconstructed from a provider summary"],
+      "source": {"selection": "explicit", "runs": [{"usage": {"inputTokens": 25, "outputTokens": 10}}]}
+    },
+    {
+      "source_record_id": "local-transcript-estimated", "agent": "composer", "provider": "cursor",
+      "model": "composer-2.5", "channel": "local-transcript", "variant": "standard", "service_tier": "unknown", "context_band": "standard",
+      "occurred_at": "2026-08-28T12:03:00+00:00", "measurement_quality": "estimated", "semantics_version": "cursor.local-transcript.v1", "assumptions": ["four characters per token"],
+      "source": {"estimated_input_tokens": 22, "estimated_cache_write_input_tokens": 4, "estimated_output_tokens": 11}
+    },
+    {
+      "source_record_id": "auto-without-routed-model", "agent": "composer", "provider": "cursor",
+      "model": "Auto", "channel": "cursor-third-party", "variant": "fast", "service_tier": "third-party", "context_band": "standard",
+      "occurred_at": "2026-08-28T12:04:00+00:00", "measurement_quality": "provider_reported", "semantics_version": "cursor.cloud-agent-run.v1", "assumptions": [],
+      "source": {"selection": "Auto", "runs": [{"usage": {"inputTokens": 18, "cacheReadTokens": 3, "outputTokens": 6}}]}
+    },
+    {
+      "source_record_id": "malformed-counter", "agent": "composer", "provider": "cursor",
+      "model": "composer-2.5", "channel": "cursor-first-party", "variant": "standard", "service_tier": "first-party", "context_band": "standard",
+      "occurred_at": "2026-08-28T12:05:00+00:00", "measurement_quality": "provider_reported", "semantics_version": "cursor.cloud-agent-run.v1", "assumptions": [],
+      "source": {"runs": [{"usage": {"inputTokens": 10, "cacheReadTokens": -1, "outputTokens": true}}], "visible_tool_requests": 2}
+    },
+    {
+      "source_record_id": "missing-input", "agent": "composer", "provider": "cursor",
+      "model": "composer-2.5", "channel": "cursor-first-party", "variant": "standard", "service_tier": "first-party", "context_band": "standard",
+      "occurred_at": "2026-08-28T12:06:00+00:00", "measurement_quality": "provider_reported", "semantics_version": "cursor.cloud-agent-run.v1", "assumptions": [],
+      "source": {"runs": [{"usage": {"cacheReadTokens": 4, "outputTokens": 12}}]}
+    },
+    {
+      "source_record_id": "missing-output", "agent": "composer", "provider": "cursor",
+      "model": "composer-2.5", "channel": "cursor-first-party", "variant": "standard", "service_tier": "first-party", "context_band": "standard",
+      "occurred_at": "2026-08-28T12:07:00+00:00", "measurement_quality": "provider_reported", "semantics_version": "cursor.cloud-agent-run.v1", "assumptions": [],
+      "source": {"runs": [{"usage": {"inputTokens": 12, "cacheReadTokens": 4}}]}
+    },
+    {
+      "source_record_id": "auto-outer-model", "agent": "composer", "provider": "cursor",
+      "model": "AuTo", "channel": "cursor-third-party", "variant": "fast", "service_tier": "third-party", "context_band": "standard",
+      "occurred_at": "2026-08-28T12:08:00+00:00", "measurement_quality": "provider_reported", "semantics_version": "cursor.cloud-agent-run.v1", "assumptions": [],
+      "source": {"routed_model": "claude-sonnet-4", "runs": [{"usage": {"inputTokens": 8, "outputTokens": 4, "cursorTokenFee": 3, "chargedCents": 0}}]}
+    },
+    {
+      "source_record_id": "explicit-routed-conflict", "agent": "composer", "provider": "cursor",
+      "model": "composer-2.5", "channel": "cursor-first-party", "variant": "standard", "service_tier": "first-party", "context_band": "standard",
+      "occurred_at": "2026-08-28T12:09:00+00:00", "measurement_quality": "provider_reported", "semantics_version": "cursor.cloud-agent-run.v1", "assumptions": [],
+      "source": {"selection": "explicit", "routed_model": "gpt-5.3-codex", "runs": [{"usage": {"inputTokens": 8, "outputTokens": 4}}]}
+    },
+    {
+      "source_record_id": "auto-routed-to-auto", "agent": "composer", "provider": "cursor",
+      "model": "Auto", "channel": "cursor-third-party", "variant": "fast", "service_tier": "third-party", "context_band": "standard",
+      "occurred_at": "2026-08-28T12:09:30+00:00", "measurement_quality": "provider_reported", "semantics_version": "cursor.cloud-agent-run.v1", "assumptions": [],
+      "source": {"selection": "Auto", "routed_model": "AUTO", "runs": [{"usage": {"inputTokens": 8, "outputTokens": 4}}]}
+    },
+    {
+      "source_record_id": "local-transcript-input-role", "agent": "composer", "provider": "cursor",
+      "model": "composer-2.5", "channel": "local-transcript", "variant": "standard", "service_tier": "unknown", "context_band": "standard",
+      "occurred_at": "2026-08-28T12:10:00+00:00", "measurement_quality": "estimated", "semantics_version": "cursor.local-transcript.v1", "assumptions": ["four characters per token"],
+      "source": {"estimated_input_tokens": 8}
+    },
+    {
+      "source_record_id": "local-transcript-output-role", "agent": "composer", "provider": "cursor",
+      "model": "composer-2.5", "channel": "local-transcript", "variant": "standard", "service_tier": "unknown", "context_band": "standard",
+      "occurred_at": "2026-08-28T12:11:00+00:00", "measurement_quality": "estimated", "semantics_version": "cursor.local-transcript.v1", "assumptions": ["four characters per token"],
+      "source": {"estimated_output_tokens": 6}
+    },
+    {
+      "source_record_id": "team-usage-charged-cents-zero-cache-write", "agent": "composer", "provider": "cursor",
+      "model": "composer-2.5", "channel": "cursor-first-party", "variant": "standard", "service_tier": "first-party", "context_band": "standard",
+      "occurred_at": "2026-08-28T12:12:00+00:00", "measurement_quality": "provider_reported", "semantics_version": "cursor.team-usage.v1", "assumptions": [],
+      "source": {"tokenUsage": {"inputTokens": 14, "cacheReadTokens": 2, "cacheWriteTokens": 0, "outputTokens": 7}, "chargedCents": 99}
+    },
+    {
+      "source_record_id": "team-usage-wrong-run-shape", "agent": "composer", "provider": "cursor",
+      "model": "composer-2.5", "channel": "cursor-first-party", "variant": "standard", "service_tier": "first-party", "context_band": "standard",
+      "occurred_at": "2026-08-28T12:13:00+00:00", "measurement_quality": "provider_reported", "semantics_version": "cursor.team-usage.v1", "assumptions": [],
+      "source": {"runs": [{"usage": {"inputTokens": 14, "outputTokens": 7}}]}
+    },
+    {
+      "source_record_id": "flattened-zero-cache-write", "agent": "composer", "provider": "cursor",
+      "model": "composer-2.5", "channel": "cursor-first-party", "variant": "standard", "service_tier": "first-party", "context_band": "standard",
+      "occurred_at": "2026-08-28T12:14:00+00:00", "measurement_quality": "provider_reported", "semantics_version": "cursor.cloud.flattened.v1", "assumptions": [],
+      "source": {"input_tokens": 14, "cache_write_input_tokens": 0, "output_tokens": 7}
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+{
+  "pack_id": "builtin.2026-08-28",
+  "valuation_as_of": "2026-08-28",
+  "sources": [
+    {
+      "id": "anthropic-api-pricing",
+      "title": "Anthropic API pricing",
+      "url": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "checked_at": "2026-08-28",
+      "scope": "Current model API rates, 5-minute and 1-hour cache-write multipliers, cache-hit rates, and output rates. The model overview was also checked for exact API IDs."
+    },
+    {
+      "id": "anthropic-prompt-caching",
+      "title": "Anthropic prompt caching",
+      "url": "https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching",
+      "checked_at": "2026-08-28",
+      "scope": "Confirms the distinct 5-minute and 1-hour cache-control modes used by the two cache-write meters."
+    },
+    {
+      "id": "anthropic-model-overview",
+      "title": "Anthropic models overview",
+      "url": "https://platform.claude.com/docs/en/models/overview",
+      "checked_at": "2026-08-28",
+      "scope": "Confirms exact current API IDs: claude-fable-5, claude-opus-5, claude-sonnet-5, and claude-haiku-4-5-20251001."
+    },
+    {
+      "id": "openai-api-pricing",
+      "title": "OpenAI API pricing",
+      "url": "https://developers.openai.com/api/docs/pricing",
+      "checked_at": "2026-08-28",
+      "scope": "The Codex row explicitly publishes gpt-5.3-codex USD input, cached-input, and output prices per one million tokens."
+    },
+    {
+      "id": "openai-codex-models",
+      "title": "OpenAI Codex models",
+      "url": "https://developers.openai.com/codex/models",
+      "checked_at": "2026-08-28",
+      "scope": "Confirms the exact gpt-5.3-codex identifier and distinguishes API-key usage from ChatGPT-credit usage."
+    },
+    {
+      "id": "xai-api-pricing",
+      "title": "xAI API pricing",
+      "url": "https://docs.x.ai/developers/pricing",
+      "checked_at": "2026-08-28",
+      "scope": "Publishes grok-4.6 short-context USD input, cached-input, and output prices per one million tokens."
+    },
+    {
+      "id": "xai-document-index",
+      "title": "xAI documentation index",
+      "url": "https://docs.x.ai/llms.txt",
+      "checked_at": "2026-08-28",
+      "scope": "Cross-checks the current grok-4.6 model identifier and links to the pricing documentation."
+    }
+  ],
+  "excluded_coverage": [
+    "Anthropic retired model IDs and provider-specific Bedrock/Vertex pricing are omitted.",
+    "Anthropic long-context and fast-mode variants are omitted because this pack has no verified adapter dimensions for those modes.",
+    "OpenAI ChatGPT/Codex credit rates are not USD/token rates; gpt-5.3-codex is included only for the explicitly published API pricing row and the exact api channel. Generic codex, codex-cli, ChatGPT-credit, and subscription-derived channels remain unpriced unless explicit API billing provenance is observed. Other Codex models and service tiers are omitted.",
+    "xAI long-context cards are omitted: the official page says long context starts at 200,000 tokens, but this snapshot has not verified a model-specific threshold and complete long-band dimensions for a safe card.",
+    "Cursor/Composer usage has no verified published USD/token rate for the contract's token meters and remains unpriced."
+  ]
+}

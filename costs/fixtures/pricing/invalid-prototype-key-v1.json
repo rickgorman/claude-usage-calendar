@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "pack_id": "fixture.loader.prototype.v1",
+  "display_name": "Prototype key",
+  "currency": "USD",
+  "valuation_as_of": "2026-08-28",
+  "rates": [],
+  "__proto__": {}
+}

@@ -1,0 +1,719 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://claude-usage-calendar.invalid/schemas/cost-estimates-v1.schema.json",
+    "title": "Published-rate-equivalent cost estimates v1",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+        "schema_version",
+        "basis",
+        "currency",
+        "valuation_as_of",
+        "pricing_pack",
+        "status",
+        "quality",
+        "total_usd",
+        "priced_subtotal_usd",
+        "hourly_usage",
+        "daily_usage",
+        "monthly_usage",
+        "yearly_usage",
+        "agents",
+        "components",
+        "unpriced_components",
+        "diagnostics",
+        "assumptions",
+        "disclaimer"
+    ],
+    "properties": {
+        "schema_version": {
+            "const": 1
+        },
+        "basis": {
+            "const": "published_rate_equivalent_snapshot"
+        },
+        "currency": {
+            "const": "USD"
+        },
+        "valuation_as_of": {
+            "$ref": "#/$defs/date"
+        },
+        "pricing_pack": {
+            "$ref": "#/$defs/provenance"
+        },
+        "status": {
+            "$ref": "#/$defs/status"
+        },
+        "quality": {
+            "$ref": "#/$defs/quality"
+        },
+        "total_usd": {
+            "$ref": "#/$defs/nullable_money"
+        },
+        "priced_subtotal_usd": {
+            "$ref": "#/$defs/money"
+        },
+        "hourly_usage": {
+            "$ref": "#/$defs/hourly_rollups"
+        },
+        "daily_usage": {
+            "$ref": "#/$defs/daily_rollups"
+        },
+        "monthly_usage": {
+            "$ref": "#/$defs/monthly_rollups"
+        },
+        "yearly_usage": {
+            "$ref": "#/$defs/yearly_rollups"
+        },
+        "agents": {
+            "type": "object",
+            "propertyNames": {
+                "$ref": "#/$defs/identifier"
+            },
+            "additionalProperties": {
+                "$ref": "#/$defs/agent_rollup"
+            }
+        },
+        "components": {
+            "type": "array",
+            "maxItems": 100000,
+            "items": {
+                "$ref": "#/$defs/priced_component"
+            }
+        },
+        "unpriced_components": {
+            "type": "array",
+            "maxItems": 100000,
+            "items": {
+                "$ref": "#/$defs/unpriced_component"
+            }
+        },
+        "diagnostics": {
+            "type": "array",
+            "maxItems": 10000,
+            "items": {
+                "$ref": "#/$defs/diagnostic"
+            }
+        },
+        "assumptions": {
+            "type": "array",
+            "maxItems": 1000,
+            "items": {
+                "$ref": "#/$defs/label"
+            },
+            "uniqueItems": true
+        },
+        "disclaimer": {
+            "$ref": "#/$defs/label"
+        }
+    },
+    "allOf": [
+        {
+            "$ref": "#/$defs/rollup_invariants"
+        },
+        {
+            "$ref": "#/$defs/cost_array_invariants"
+        }
+    ],
+    "$defs": {
+        "identifier": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": "^(?!(?:__proto__|prototype|constructor)$).+$"
+        },
+        "nullable_identifier": {
+            "oneOf": [
+                {
+                    "type": "null"
+                },
+                {
+                    "$ref": "#/$defs/identifier"
+                }
+            ]
+        },
+        "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+        },
+        "date": {
+            "type": "string",
+            "format": "date"
+        },
+        "money": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)\\.[0-9]{6}$",
+            "maxLength": 64
+        },
+        "nullable_money": {
+            "oneOf": [
+                {
+                    "type": "null"
+                },
+                {
+                    "$ref": "#/$defs/money"
+                }
+            ]
+        },
+        "status": {
+            "enum": [
+                "complete",
+                "partial",
+                "unpriced",
+                "disabled"
+            ]
+        },
+        "quality": {
+            "enum": [
+                "provider_reported",
+                "derived",
+                "estimated",
+                "mixed"
+            ]
+        },
+        "record_quality": {
+            "enum": [
+                "provider_reported",
+                "derived",
+                "estimated"
+            ]
+        },
+        "meter": {
+            "enum": [
+                "input.uncached",
+                "input.cache_read",
+                "input.cache_write_5m",
+                "input.cache_write_1h",
+                "output"
+            ]
+        },
+        "reason": {
+            "enum": [
+                "SEMANTICS_INCONSISTENT",
+                "UNSUPPORTED_SEMANTICS_VERSION",
+                "MALFORMED_SOURCE_RECORD",
+                "INVALID_QUANTITY",
+                "MISSING_PROVIDER",
+                "UNKNOWN_PROVIDER",
+                "MISSING_MODEL",
+                "MISSING_CHANNEL",
+                "MISSING_VARIANT",
+                "MISSING_SERVICE_TIER",
+                "MISSING_CONTEXT_BAND",
+                "MISSING_REQUEST_TOTAL",
+                "UNKNOWN_CACHE_TTL",
+                "UNKNOWN_ROUTED_MODEL",
+                "UNSUPPORTED_CHARGE",
+                "UNSUPPORTED_METER",
+                "ADAPTER_UNAVAILABLE",
+                "BOUNDED_COMPACTION",
+                "RATE_NOT_FOUND",
+                "RATE_AMBIGUOUS"
+            ]
+        },
+        "provenance": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "id",
+                "kind",
+                "sha256"
+            ],
+            "properties": {
+                "id": {
+                    "$ref": "#/$defs/identifier"
+                },
+                "kind": {
+                    "enum": [
+                        "builtin",
+                        "custom"
+                    ]
+                },
+                "sha256": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                }
+            }
+        },
+        "amount_rollup": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "status",
+                "quality",
+                "total_usd",
+                "priced_subtotal_usd"
+            ],
+            "properties": {
+                "status": {
+                    "$ref": "#/$defs/status"
+                },
+                "quality": {
+                    "$ref": "#/$defs/quality"
+                },
+                "total_usd": {
+                    "$ref": "#/$defs/nullable_money"
+                },
+                "priced_subtotal_usd": {
+                    "$ref": "#/$defs/money"
+                }
+            },
+            "allOf": [
+                {
+                    "$ref": "#/$defs/rollup_invariants"
+                }
+            ]
+        },
+        "agent_rollup": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "display_name",
+                "status",
+                "quality",
+                "total_usd",
+                "priced_subtotal_usd",
+                "hourly_usage",
+                "daily_usage",
+                "monthly_usage",
+                "yearly_usage"
+            ],
+            "properties": {
+                "display_name": {
+                    "$ref": "#/$defs/label"
+                },
+                "status": {
+                    "$ref": "#/$defs/status"
+                },
+                "quality": {
+                    "$ref": "#/$defs/quality"
+                },
+                "total_usd": {
+                    "$ref": "#/$defs/nullable_money"
+                },
+                "priced_subtotal_usd": {
+                    "$ref": "#/$defs/money"
+                },
+                "hourly_usage": {
+                    "$ref": "#/$defs/hourly_rollups"
+                },
+                "daily_usage": {
+                    "$ref": "#/$defs/daily_rollups"
+                },
+                "monthly_usage": {
+                    "$ref": "#/$defs/monthly_rollups"
+                },
+                "yearly_usage": {
+                    "$ref": "#/$defs/yearly_rollups"
+                }
+            },
+            "allOf": [
+                {
+                    "$ref": "#/$defs/rollup_invariants"
+                }
+            ]
+        },
+        "rollup_invariants": {
+            "allOf": [
+                {
+                    "if": {
+                        "required": [
+                            "status"
+                        ],
+                        "properties": {
+                            "status": {
+                                "const": "complete"
+                            }
+                        }
+                    },
+                    "then": {
+                        "properties": {
+                            "total_usd": {
+                                "$ref": "#/$defs/money"
+                            }
+                        }
+                    }
+                },
+                {
+                    "if": {
+                        "required": [
+                            "status"
+                        ],
+                        "properties": {
+                            "status": {
+                                "enum": [
+                                    "partial",
+                                    "unpriced",
+                                    "disabled"
+                                ]
+                            }
+                        }
+                    },
+                    "then": {
+                        "properties": {
+                            "total_usd": {
+                                "type": "null"
+                            }
+                        }
+                    }
+                },
+                {
+                    "if": {
+                        "required": [
+                            "status"
+                        ],
+                        "properties": {
+                            "status": {
+                                "enum": [
+                                    "unpriced",
+                                    "disabled"
+                                ]
+                            }
+                        }
+                    },
+                    "then": {
+                        "properties": {
+                            "priced_subtotal_usd": {
+                                "const": "0.000000"
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "hourly_rollups": {
+            "type": "object",
+            "propertyNames": {
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+            },
+            "additionalProperties": {
+                "type": "object",
+                "propertyNames": {
+                    "pattern": "^(0|[1-9]|1[0-9]|2[0-3])$"
+                },
+                "additionalProperties": {
+                    "$ref": "#/$defs/amount_rollup"
+                }
+            }
+        },
+        "daily_rollups": {
+            "type": "object",
+            "propertyNames": {
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+            },
+            "additionalProperties": {
+                "$ref": "#/$defs/amount_rollup"
+            }
+        },
+        "monthly_rollups": {
+            "type": "object",
+            "propertyNames": {
+                "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+            },
+            "additionalProperties": {
+                "$ref": "#/$defs/amount_rollup"
+            }
+        },
+        "yearly_rollups": {
+            "type": "object",
+            "propertyNames": {
+                "pattern": "^[0-9]{4}$"
+            },
+            "additionalProperties": {
+                "$ref": "#/$defs/amount_rollup"
+            }
+        },
+        "cost_array_invariants": {
+            "allOf": [
+                {
+                    "if": {
+                        "required": [
+                            "status"
+                        ],
+                        "properties": {
+                            "status": {
+                                "const": "complete"
+                            }
+                        }
+                    },
+                    "then": {
+                        "properties": {
+                            "unpriced_components": {
+                                "maxItems": 0
+                            }
+                        }
+                    }
+                },
+                {
+                    "if": {
+                        "required": [
+                            "status"
+                        ],
+                        "properties": {
+                            "status": {
+                                "const": "partial"
+                            }
+                        }
+                    },
+                    "then": {
+                        "properties": {
+                            "components": {
+                                "minItems": 1
+                            },
+                            "unpriced_components": {
+                                "minItems": 1
+                            }
+                        }
+                    }
+                },
+                {
+                    "if": {
+                        "required": [
+                            "status"
+                        ],
+                        "properties": {
+                            "status": {
+                                "const": "unpriced"
+                            }
+                        }
+                    },
+                    "then": {
+                        "properties": {
+                            "components": {
+                                "maxItems": 0
+                            },
+                            "unpriced_components": {
+                                "minItems": 1
+                            }
+                        }
+                    }
+                },
+                {
+                    "if": {
+                        "required": [
+                            "status"
+                        ],
+                        "properties": {
+                            "status": {
+                                "const": "disabled"
+                            }
+                        }
+                    },
+                    "then": {
+                        "properties": {
+                            "components": {
+                                "maxItems": 0
+                            },
+                            "unpriced_components": {
+                                "maxItems": 0
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "dimensions": {
+            "type": "object",
+            "required": [
+                "source_record_ids",
+                "occurred_on",
+                "agent",
+                "provider",
+                "model",
+                "channel",
+                "variant",
+                "service_tier",
+                "context_band",
+                "meter",
+                "measurement_quality",
+                "quantity",
+                "unit",
+                "assumptions"
+            ],
+            "properties": {
+                "source_record_ids": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "$ref": "#/$defs/identifier"
+                    },
+                    "uniqueItems": true
+                },
+                "occurred_on": {
+                    "$ref": "#/$defs/date"
+                },
+                "occurred_hour": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 23
+                },
+                "agent": {
+                    "$ref": "#/$defs/identifier"
+                },
+                "provider": {
+                    "oneOf": [
+                        {
+                            "type": "null"
+                        },
+                        {
+                            "$ref": "#/$defs/identifier"
+                        }
+                    ]
+                },
+                "model": {
+                    "$ref": "#/$defs/nullable_identifier"
+                },
+                "channel": {
+                    "$ref": "#/$defs/nullable_identifier"
+                },
+                "variant": {
+                    "$ref": "#/$defs/nullable_identifier"
+                },
+                "service_tier": {
+                    "$ref": "#/$defs/nullable_identifier"
+                },
+                "context_band": {
+                    "$ref": "#/$defs/nullable_identifier"
+                },
+                "meter": {
+                    "oneOf": [
+                        {
+                            "type": "null"
+                        },
+                        {
+                            "$ref": "#/$defs/meter"
+                        }
+                    ]
+                },
+                "measurement_quality": {
+                    "$ref": "#/$defs/record_quality"
+                },
+                "quantity": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "unit": {
+                    "enum": [
+                        "tokens",
+                        "requests",
+                        "count"
+                    ]
+                },
+                "assumptions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/$defs/label"
+                    },
+                    "uniqueItems": true
+                }
+            }
+        },
+        "priced_component": {
+            "allOf": [
+                {
+                    "$ref": "#/$defs/dimensions"
+                },
+                {
+                    "type": "object",
+                    "required": [
+                        "provider",
+                        "model",
+                        "channel",
+                        "variant",
+                        "service_tier",
+                        "context_band",
+                        "meter",
+                        "rate_unit",
+                        "price",
+                        "cost_usd"
+                    ],
+                    "properties": {
+                        "provider": {
+                            "enum": [
+                                "anthropic",
+                                "openai",
+                                "xai",
+                                "cursor"
+                            ]
+                        },
+                        "model": {
+                            "$ref": "#/$defs/identifier"
+                        },
+                        "channel": {
+                            "$ref": "#/$defs/identifier"
+                        },
+                        "variant": {
+                            "$ref": "#/$defs/identifier"
+                        },
+                        "service_tier": {
+                            "$ref": "#/$defs/identifier"
+                        },
+                        "context_band": {
+                            "$ref": "#/$defs/identifier"
+                        },
+                        "meter": {
+                            "$ref": "#/$defs/meter"
+                        },
+                        "unit": {
+                            "const": "tokens"
+                        },
+                        "rate_unit": {
+                            "const": "million_tokens"
+                        },
+                        "price": {
+                            "type": "string",
+                            "maxLength": 64,
+                            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,12})?$"
+                        },
+                        "cost_usd": {
+                            "$ref": "#/$defs/money"
+                        }
+                    }
+                }
+            ],
+            "unevaluatedProperties": false
+        },
+        "unpriced_component": {
+            "allOf": [
+                {
+                    "$ref": "#/$defs/dimensions"
+                },
+                {
+                    "type": "object",
+                    "required": [
+                        "reason"
+                    ],
+                    "properties": {
+                        "reason": {
+                            "$ref": "#/$defs/reason"
+                        }
+                    }
+                }
+            ],
+            "unevaluatedProperties": false
+        },
+        "diagnostic": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "reason",
+                "source_record_id"
+            ],
+            "properties": {
+                "reason": {
+                    "$ref": "#/$defs/reason"
+                },
+                "source_record_id": {
+                    "$ref": "#/$defs/identifier"
+                },
+                "meter": {
+                    "$ref": "#/$defs/meter"
+                },
+                "detail": {
+                    "$ref": "#/$defs/label"
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,41 @@
+{
+  "fixture_version": 1,
+  "description": "Untrusted text vectors for every cost-dashboard display surface.",
+  "surfaces": [
+    "agent",
+    "provider",
+    "model",
+    "session",
+    "pack",
+    "warning",
+    "legend",
+    "tooltip",
+    "explain"
+  ],
+  "payloads": [
+    {
+      "name": "script_breakout",
+      "value": "probe-script</script><script data-cost-probe=script>alert('cost-probe')</script>"
+    },
+    {
+      "name": "event_handler",
+      "value": "probe-handler<img src=x onerror=alert(\"cost-probe\")>"
+    },
+    {
+      "name": "svg_handler",
+      "value": "probe-svg<svg/onload=alert('cost-probe')>"
+    },
+    {
+      "name": "attribute_quotes",
+      "value": "probe-quotes\" autofocus onfocus=alert('cost-probe') x=\""
+    },
+    {
+      "name": "unicode_separators",
+      "value": "probe-unicode\u2028alert('cost-probe')\u2029"
+    },
+    {
+      "name": "html_comment_and_entity",
+      "value": "probe-comment--><details open ontoggle=alert(&quot;cost-probe&quot;)>"
+    }
+  ]
+}

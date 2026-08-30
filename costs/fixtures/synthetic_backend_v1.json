@@ -1,0 +1,77 @@
+{
+  "fixture_version": 1,
+  "description": "Synthetic executable contract chain only; no values are official provider data or rates.",
+  "xai_long_context_threshold_tokens": 128000,
+  "raw_usage_records": [
+    {
+      "source_record_id": "anthropic-unknown-ttl", "agent": "claude", "provider": "anthropic",
+      "model": "synthetic-anthropic-v1", "channel": "api", "variant": "standard",
+      "service_tier": "default", "context_band": "standard", "occurred_at": "2026-08-01T12:00:00+00:00",
+      "measurement_quality": "provider_reported", "semantics_version": "anthropic.v1", "assumptions": [],
+      "source": {"input_tokens": 40, "cache_read_input_tokens": 20, "cache_creation_input_tokens": 10, "output_tokens": 5}
+    },
+    {
+      "source_record_id": "openai-negative-remainder", "agent": "codex", "provider": "openai",
+      "model": "synthetic-openai-v1", "channel": "codex", "variant": "standard",
+      "service_tier": "default", "context_band": "standard", "occurred_at": "2026-08-01T12:01:00+00:00",
+      "measurement_quality": "provider_reported", "semantics_version": "openai.inclusive-input.v1", "assumptions": [],
+      "source": {"input_tokens": 10, "cached_input_tokens": 11, "cache_write_input_tokens": 0, "output_tokens": 2}
+    },
+    {
+      "source_record_id": "xai-standard-boundary", "agent": "grok", "provider": "xai",
+      "model": "synthetic-xai-v1", "channel": "api", "variant": "standard", "service_tier": "default",
+      "context_band": null, "occurred_at": "2026-08-01T12:02:00+00:00", "measurement_quality": "provider_reported",
+      "semantics_version": "xai.v1", "assumptions": [],
+      "source": {"uncached_input_tokens": 80000, "cached_input_tokens": 48000, "request_total_prompt_tokens_including_cache": 128000, "output_tokens": 10}
+    },
+    {
+      "source_record_id": "xai-long-boundary", "agent": "grok", "provider": "xai",
+      "model": "synthetic-xai-v1", "channel": "api", "variant": "standard", "service_tier": "default",
+      "context_band": null, "occurred_at": "2026-08-01T12:03:00+00:00", "measurement_quality": "provider_reported",
+      "semantics_version": "xai.v1", "assumptions": [],
+      "source": {"uncached_input_tokens": 80001, "cached_input_tokens": 48000, "request_total_prompt_tokens_including_cache": 128001, "output_tokens": 10}
+    },
+    {
+      "source_record_id": "xai-missing-request-total", "agent": "grok", "provider": "xai",
+      "model": "synthetic-xai-v1", "channel": "api", "variant": "standard", "service_tier": "default",
+      "context_band": null, "occurred_at": "2026-08-01T12:04:00+00:00", "measurement_quality": "provider_reported",
+      "semantics_version": "xai.v1", "assumptions": [], "source": {"uncached_input_tokens": 100, "cached_input_tokens": 50, "output_tokens": 4}
+    },
+    {
+      "source_record_id": "cursor-provider-reported", "agent": "composer", "provider": "cursor",
+      "model": "synthetic-cursor-v1", "channel": "cloud-agent", "variant": "fast", "service_tier": "first-party",
+      "context_band": "standard", "occurred_at": "2026-08-01T12:05:00+00:00", "measurement_quality": "provider_reported",
+      "semantics_version": "cursor.cloud.v1", "assumptions": [], "source": {"output_tokens": 10, "visible_tool_requests": 1}
+    },
+    {
+      "source_record_id": "cursor-derived", "agent": "composer", "provider": "cursor",
+      "model": "synthetic-cursor-v1", "channel": "subscription", "variant": "standard", "service_tier": "first-party",
+      "context_band": "standard", "occurred_at": "2026-08-01T12:06:00+00:00", "measurement_quality": "derived",
+      "semantics_version": "cursor.cloud.v1", "assumptions": ["synthetic provider component derivation"], "source": {"input_tokens": 20}
+    },
+    {
+      "source_record_id": "cursor-estimated", "agent": "composer", "provider": "cursor",
+      "model": "synthetic-cursor-estimated-v1", "channel": "local-transcript", "variant": "standard", "service_tier": "unknown",
+      "context_band": "standard", "occurred_at": "2026-08-01T12:07:00+00:00", "measurement_quality": "estimated",
+      "semantics_version": "cursor.local-transcript.v1", "assumptions": ["synthetic four-characters-per-token reconstruction"],
+      "source": {"estimated_input_tokens": 2}
+    },
+    {
+      "source_record_id": "unknown-provider-record", "agent": "mystery", "provider": "future_provider",
+      "model": "future-model-v1", "channel": null, "variant": null, "service_tier": null, "context_band": null,
+      "occurred_at": "2026-08-01T12:08:00+00:00", "measurement_quality": "provider_reported",
+      "semantics_version": "unknown.v1", "assumptions": [], "source": {"visible_tokens": 7}
+    }
+  ],
+  "expected_normalization": [
+    {"source_record_id": "anthropic-unknown-ttl", "billable": [["input.uncached", 40], ["input.cache_read", 20], ["output", 5]], "unpriced": [[null, 10, "tokens", "UNKNOWN_CACHE_TTL"]]},
+    {"source_record_id": "openai-negative-remainder", "whole_record_unpriced": true, "billable": [], "unpriced": [[null, 10, "tokens", "SEMANTICS_INCONSISTENT"], ["input.cache_read", 11, "tokens", "SEMANTICS_INCONSISTENT"], ["output", 2, "tokens", "SEMANTICS_INCONSISTENT"]]},
+    {"source_record_id": "xai-standard-boundary", "selected_context_band": "standard", "billable": [["input.uncached", 80000], ["input.cache_read", 48000], ["output", 10]], "unpriced": []},
+    {"source_record_id": "xai-long-boundary", "selected_context_band": "long", "billable": [["input.uncached", 80001], ["input.cache_read", 48000], ["output", 10]], "unpriced": []},
+    {"source_record_id": "xai-missing-request-total", "billable": [], "unpriced": [["input.uncached", 100, "tokens", "MISSING_REQUEST_TOTAL"], ["input.cache_read", 50, "tokens", "MISSING_REQUEST_TOTAL"], ["output", 4, "tokens", "MISSING_REQUEST_TOTAL"]]},
+    {"source_record_id": "cursor-provider-reported", "billable": [["output", 10]], "unpriced": [[null, 1, "requests", "UNSUPPORTED_CHARGE"]]},
+    {"source_record_id": "cursor-derived", "billable": [["input.uncached", 20]], "unpriced": []},
+    {"source_record_id": "cursor-estimated", "billable": [["input.uncached", 2]], "unpriced": []},
+    {"source_record_id": "unknown-provider-record", "billable": [], "unpriced": [[null, 7, "tokens", "UNKNOWN_PROVIDER"]]}
+  ]
+}

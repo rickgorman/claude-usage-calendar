@@ -1,0 +1,81 @@
+{
+  "fixture_version": 1,
+  "cases": [
+    {
+      "name": "anthropic_input_is_not_cache_subtracted",
+      "adapter": "anthropic",
+      "record": {
+        "source_record_id": "mutation-anthropic-subtraction",
+        "agent": "claude",
+        "provider": "anthropic",
+        "model": "synthetic-anthropic-v1",
+        "channel": "api",
+        "variant": "standard",
+        "service_tier": "default",
+        "context_band": "standard",
+        "occurred_at": "2026-08-01T12:00:00+00:00",
+        "measurement_quality": "provider_reported",
+        "semantics_version": "anthropic.v1",
+        "assumptions": [],
+        "source": {"input_tokens": 40, "cache_read_input_tokens": 20, "cache_creation_input_tokens_5m": 10, "output_tokens": 5}
+      }
+    },
+    {
+      "name": "openai_inclusive_input_subtracts_cache",
+      "adapter": "openai",
+      "record": {
+        "source_record_id": "mutation-openai-no-subtraction",
+        "agent": "codex",
+        "provider": "openai",
+        "model": "synthetic-openai-v1",
+        "channel": "codex",
+        "variant": "standard",
+        "service_tier": "default",
+        "context_band": "standard",
+        "occurred_at": "2026-08-01T12:01:00+00:00",
+        "measurement_quality": "provider_reported",
+        "semantics_version": "openai.inclusive-input.v1",
+        "assumptions": [],
+        "source": {"input_tokens": 100, "cached_input_tokens": 30, "cache_write_input_tokens": 0, "output_tokens": 20}
+      }
+    },
+    {
+      "name": "openai_reasoning_is_not_double_counted",
+      "adapter": "openai",
+      "record": {
+        "source_record_id": "mutation-openai-reasoning-double",
+        "agent": "codex",
+        "provider": "openai",
+        "model": "synthetic-openai-v1",
+        "channel": "codex",
+        "variant": "standard",
+        "service_tier": "default",
+        "context_band": "standard",
+        "occurred_at": "2026-08-01T12:02:00+00:00",
+        "measurement_quality": "provider_reported",
+        "semantics_version": "openai.inclusive-input.v1",
+        "assumptions": [],
+        "source": {"input_tokens": 10, "cached_input_tokens": 0, "cache_write_input_tokens": 0, "output_tokens": 100, "reasoning_output_tokens": 40}
+      }
+    },
+    {
+      "name": "openai_negative_remainder_is_not_clamped",
+      "adapter": "openai",
+      "record": {
+        "source_record_id": "mutation-openai-negative-clamp",
+        "agent": "codex",
+        "provider": "openai",
+        "model": "synthetic-openai-v1",
+        "channel": "codex",
+        "variant": "standard",
+        "service_tier": "default",
+        "context_band": "standard",
+        "occurred_at": "2026-08-01T12:03:00+00:00",
+        "measurement_quality": "provider_reported",
+        "semantics_version": "openai.inclusive-input.v1",
+        "assumptions": [],
+        "source": {"input_tokens": 10, "cached_input_tokens": 11, "cache_write_input_tokens": 0, "output_tokens": 2}
+      }
+    }
+  ]
+}

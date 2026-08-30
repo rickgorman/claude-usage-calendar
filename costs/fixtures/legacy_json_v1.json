@@ -1,0 +1,32 @@
+{
+  "timezone": "UTC",
+  "date_range": {"start": "2026-08-01", "end": "2026-08-01"},
+  "days_with_data": 1,
+  "unique_messages": 1,
+  "totals": {
+    "input_tokens": 2,
+    "output_tokens": 3,
+    "cache_read_input_tokens": 5,
+    "cache_creation_input_tokens": 7,
+    "total_tokens": 17
+  },
+  "agents": {},
+  "daily_usage": {
+    "2026-08-01": {
+      "input_tokens": 2,
+      "output_tokens": 3,
+      "cache_read_input_tokens": 5,
+      "cache_creation_input_tokens": 7
+    }
+  },
+  "hourly_usage": {
+    "2026-08-01": {
+      "12": {
+        "input_tokens": 2,
+        "output_tokens": 3,
+        "cache_read_input_tokens": 5,
+        "cache_creation_input_tokens": 7
+      }
+    }
+  }
+}

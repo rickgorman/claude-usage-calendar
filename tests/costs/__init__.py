@@ -1,0 +1,1 @@
+"""Cost contract tests."""

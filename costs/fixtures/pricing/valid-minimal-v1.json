@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "pack_id": "fixture.loader.minimal.v1",
+  "display_name": "Loader test pack",
+  "currency": "USD",
+  "valuation_as_of": "2026-08-28",
+  "rates": [
+    {
+      "provider": "openai",
+      "model": "synthetic-openai-v1",
+      "channel": "api",
+      "variant": "standard",
+      "service_tier": "default",
+      "context_band": "standard",
+      "meter": "input.uncached",
+      "valuation_date": "2026-08-28",
+      "measurement_quality": "provider_reported",
+      "unit": "million_tokens",
+      "price": "1.234567890123",
+      "source": {
+        "title": "Synthetic loader fixture",
+        "url": "https://example.invalid/pricing",
+        "checked_at": "2026-08-28"
+      }
+    }
+  ]
+}

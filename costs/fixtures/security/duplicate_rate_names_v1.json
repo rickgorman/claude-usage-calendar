@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "pack_id": "duplicate-rate-name",
+  "display_name": "Duplicate nested JSON member fixture",
+  "currency": "USD",
+  "valuation_as_of": "2026-08-01",
+  "rates": [{
+    "provider": "anthropic",
+    "model": "synthetic-anthropic-v1",
+    "channel": "api",
+    "variant": "standard",
+    "service_tier": "default",
+    "context_band": "standard",
+    "meter": "output",
+    "valuation_date": "2026-08-01",
+    "measurement_quality": "provider_reported",
+    "unit": "million_tokens",
+    "price": "15",
+    "price": "0",
+    "source": {"title": "fixture", "url": "https://example.invalid", "checked_at": "2026-08-01"}
+  }]
+}
