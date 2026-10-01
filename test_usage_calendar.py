@@ -1,11 +1,14 @@
+import contextlib
 import importlib.util
 import json
 import os
 import shutil
+import sys
 import tempfile
 import unittest
 import unittest.mock
 from datetime import timedelta, timezone
+from io import StringIO
 from pathlib import Path
 
 MODULE_PATH = Path(__file__).with_name("claude-usage-calendar.py")
@@ -20,6 +23,43 @@ def write_jsonl(path, records):
         "".join(json.dumps(record) + "\n" for record in records),
         encoding="utf-8",
     )
+
+
+def claude_assistant(message_id, input_tokens, output_tokens=0):
+    return {
+        "type": "assistant",
+        "timestamp": "2026-01-02T10:00:00Z",
+        "message": {
+            "id": message_id,
+            "usage": {
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "cache_read_input_tokens": 0,
+                "cache_creation_input_tokens": 0,
+            },
+        },
+    }
+
+
+def codex_token_event(input_tokens, ordinal=1):
+    usage = {
+        "input_tokens": input_tokens,
+        "output_tokens": 5,
+        "cached_input_tokens": 0,
+        "cache_write_input_tokens": 0,
+    }
+    return {
+        "type": "event_msg",
+        "ordinal": ordinal,
+        "timestamp": "2026-01-02T11:00:00Z",
+        "payload": {
+            "type": "token_count",
+            "info": {
+                "total_token_usage": usage,
+                "last_token_usage": dict(usage),
+            },
+        },
+    }
 
 
 class MultiAgentUsageTests(unittest.TestCase):
@@ -828,6 +868,342 @@ class ParseCacheTests(unittest.TestCase):
             self.claude_files_by_agent(), tz, cache_path=self.cache_path, stats=stats
         )
         self.assertEqual(stats["historical_files"], 1)
+
+    def test_import_history_counts_existing_backup_across_runs(self):
+        backup = self.root / "backup"
+        imported = backup / "11111111-1111-1111-1111-111111111111.jsonl"
+        write_jsonl(imported, [claude_assistant("msg-import", 10)])
+        tz = timezone.utc
+        file_count, row_count = usage_calendar.import_history(
+            str(backup), tz, self.cache_path
+        )
+        self.assertEqual((file_count, row_count), (1, 1))
+        imported_abs = os.path.abspath(str(imported))
+        entries, _sha_matches = usage_calendar.load_parse_cache(self.cache_path, tz)
+        self.assertTrue(entries[imported_abs]["imported"])
+
+        current = self.write_claude_file(
+            ".claude/projects/demo/22222222-2222-2222-2222-222222222222.jsonl",
+            [claude_assistant("msg-current", 4)],
+        )
+        current_abs = os.path.abspath(str(current))
+        stats = {}
+        _, _, count, agents = self.parse_result(
+            self.claude_files_by_agent(current),
+            tz,
+            cache_path=self.cache_path,
+            stats=stats,
+        )
+        self.assertEqual(count, 2)
+        self.assertEqual(agents["claude"]["totals"]["input_tokens"], 14)
+        self.assertEqual(stats["imported_files"], 1)
+        self.assertTrue(imported.is_file())
+
+        stats_again = {}
+        _, _, count_again, agents_again = self.parse_result(
+            self.claude_files_by_agent(current),
+            tz,
+            cache_path=self.cache_path,
+            stats=stats_again,
+        )
+        self.assertEqual(count_again, 2)
+        self.assertEqual(agents_again["claude"]["totals"]["input_tokens"], 14)
+        self.assertEqual(stats_again["imported_files"], 1)
+        self.assertTrue(backup.is_dir())
+        payload = json.loads(Path(self.cache_path).read_text(encoding="utf-8"))
+        self.assertTrue(payload["files"][imported_abs]["imported"])
+        self.assertEqual(payload["files"][imported_abs]["rows"][0][3], 10)
+        self.assertNotIn("imported", payload["files"][current_abs])
+
+    def test_reimporting_same_folder_is_idempotent(self):
+        current = self.write_claude_file(
+            ".claude/projects/demo/33333333-3333-3333-3333-333333333333.jsonl",
+            [claude_assistant("msg-kept", 6)],
+        )
+        backup = self.root / "backup"
+        imported = backup / "44444444-4444-4444-4444-444444444444.jsonl"
+        write_jsonl(imported, [claude_assistant("msg-import", 9)])
+        tz = timezone.utc
+        current_abs = os.path.abspath(str(current))
+        imported_abs = os.path.abspath(str(imported))
+        self.parse_result(
+            self.claude_files_by_agent(current), tz, cache_path=self.cache_path
+        )
+        first_import = usage_calendar.import_history(str(backup), tz, self.cache_path)
+        seeded = usage_calendar.load_parse_cache(self.cache_path, tz)[0]
+        files = self.claude_files_by_agent(current)
+        before = self.parse_result(files, tz, cache_path=self.cache_path)
+        second_import = usage_calendar.import_history(str(backup), tz, self.cache_path)
+        after_import = usage_calendar.load_parse_cache(self.cache_path, tz)[0]
+        after = self.parse_result(files, tz, cache_path=self.cache_path)
+
+        self.assertEqual(second_import, first_import)
+        self.assertEqual(after, before)
+        self.assertEqual(before[3]["claude"]["totals"]["input_tokens"], 15)
+        self.assertEqual(set(after_import), {current_abs, imported_abs})
+        self.assertEqual(after_import[current_abs], seeded[current_abs])
+        self.assertTrue(after_import[imported_abs]["imported"])
+        self.assertEqual(len(after_import[imported_abs]["rows"]), 1)
+
+    def test_imported_codex_basename_is_not_double_counted(self):
+        rollout_name = "rollout-2026-01-02T11-00-00-session.jsonl"
+        backup = self.root / "backup"
+        imported = backup / "old" / rollout_name
+        write_jsonl(imported, [codex_token_event(40)])
+        tz = timezone.utc
+        file_count, row_count = usage_calendar.import_history(
+            str(backup), tz, self.cache_path
+        )
+        self.assertEqual((file_count, row_count), (1, 1))
+
+        scanned = self.root / ".codex/sessions/2026/01/02" / rollout_name
+        write_jsonl(scanned, [codex_token_event(70)])
+        stats = {}
+        _, _, count, agents = self.parse_result(
+            self.codex_files_by_agent(scanned),
+            tz,
+            cache_path=self.cache_path,
+            stats=stats,
+        )
+        self.assertEqual(count, 1)
+        self.assertEqual(agents["codex"]["totals"]["input_tokens"], 70)
+        self.assertEqual(stats["imported_files"], 0)
+        payload = json.loads(Path(self.cache_path).read_text(encoding="utf-8"))
+        imported_abs = os.path.abspath(str(imported))
+        self.assertTrue(payload["files"][imported_abs]["imported"])
+        self.assertEqual(payload["files"][imported_abs]["rows"][0][3], 40)
+        self.assertIn(os.path.abspath(str(scanned)), payload["files"])
+
+    def test_import_history_drops_stale_non_imported_entries_on_sha_mismatch(self):
+        existing = self.write_claude_file(
+            ".claude/projects/demo/session-stale-import.jsonl",
+            [claude_assistant("msg-stale-import", 20)],
+        )
+        deleted = self.write_claude_file(
+            ".claude/projects/demo/session-stale-deleted.jsonl",
+            [claude_assistant("msg-stale-deleted", 11)],
+        )
+        tz = timezone.utc
+        self.parse_result(
+            self.claude_files_by_agent(existing, deleted),
+            tz,
+            cache_path=self.cache_path,
+        )
+        deleted_abs = os.path.abspath(str(deleted))
+        deleted.unlink()
+        payload = json.loads(Path(self.cache_path).read_text(encoding="utf-8"))
+        existing_abs = os.path.abspath(str(existing))
+        payload["script_sha256"] = "0" * 64
+        payload["files"][existing_abs]["rows"][0][3] = 999
+        Path(self.cache_path).write_text(
+            json.dumps(payload, separators=(",", ":")), encoding="utf-8"
+        )
+
+        backup = self.root / "backup"
+        backup.mkdir()
+        usage_calendar.import_history(str(backup), tz, self.cache_path)
+
+        stats = {}
+        _, _, count, agents = self.parse_result(
+            self.claude_files_by_agent(existing),
+            tz,
+            cache_path=self.cache_path,
+            stats=stats,
+        )
+        self.assertEqual(count, 2)
+        self.assertEqual(agents["claude"]["totals"]["input_tokens"], 31)
+        self.assertEqual(stats.get("historical_files"), 1)
+        stored = json.loads(Path(self.cache_path).read_text(encoding="utf-8"))
+        self.assertEqual(stored["files"][existing_abs]["rows"][0][3], 20)
+        self.assertIn(deleted_abs, stored["files"])
+
+    def test_imported_entries_survive_script_sha_mismatch(self):
+        backup = self.root / "backup"
+        imported = backup / "55555555-5555-5555-5555-555555555555.jsonl"
+        write_jsonl(imported, [claude_assistant("msg-sha-import", 8)])
+        tz = timezone.utc
+        usage_calendar.import_history(str(backup), tz, self.cache_path)
+        payload = json.loads(Path(self.cache_path).read_text(encoding="utf-8"))
+        payload["script_sha256"] = "0" * 64
+        Path(self.cache_path).write_text(
+            json.dumps(payload, separators=(",", ":")), encoding="utf-8"
+        )
+        _entries, sha_matches = usage_calendar.load_parse_cache(self.cache_path, tz)
+        self.assertFalse(sha_matches)
+
+        counts = {"paths": []}
+        original = usage_calendar.PARSERS["claude"]
+
+        def counting_parser(filepath, tz_info):
+            counts["paths"].append(os.path.abspath(filepath))
+            yield from original(filepath, tz_info)
+
+        stats = {}
+        usage_calendar.PARSERS["claude"] = counting_parser
+        try:
+            _, _, count, agents = self.parse_result(
+                self.claude_files_by_agent(),
+                tz,
+                cache_path=self.cache_path,
+                stats=stats,
+            )
+        finally:
+            usage_calendar.PARSERS["claude"] = original
+
+        self.assertEqual(counts["paths"], [])
+        self.assertEqual(count, 1)
+        self.assertEqual(agents["claude"]["totals"]["input_tokens"], 8)
+        self.assertEqual(stats["imported_files"], 1)
+        self.assertTrue(imported.is_file())
+        stored = json.loads(Path(self.cache_path).read_text(encoding="utf-8"))
+        imported_abs = os.path.abspath(str(imported))
+        self.assertTrue(stored["files"][imported_abs]["imported"])
+        self.assertEqual(stored["files"][imported_abs]["rows"][0][3], 8)
+
+    def test_non_bool_imported_field_is_corrupt(self):
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "format_version": usage_calendar.CACHE_FORMAT_VERSION,
+            "script_sha256": "a" * 64,
+            "tz": str(timezone.utc),
+            "files": {
+                str(self.root / "backup" / "session.jsonl"): {
+                    "agent": "claude",
+                    "st_size": 12,
+                    "st_mtime_ns": 12,
+                    "rows": [["claude:msg", "2026-01-02", 10, 4, 1, 0, 0]],
+                    "imported": 1,
+                }
+            },
+        }
+        Path(self.cache_path).write_text(json.dumps(payload), encoding="utf-8")
+        entries, _sha_matches = usage_calendar.load_parse_cache(
+            self.cache_path, timezone.utc
+        )
+        self.assertEqual(entries, {})
+        self.assertFalse(os.path.isfile(self.cache_path))
+        corrupt_files = list(self.cache_dir.glob("parse-cache-v1.json.corrupt-*"))
+        self.assertEqual(len(corrupt_files), 1)
+
+    def test_stats_reports_imported_file_count(self):
+        backup = self.root / "backup"
+        write_jsonl(
+            backup / "66666666-6666-6666-6666-666666666666.jsonl",
+            [claude_assistant("msg-one", 10)],
+        )
+        write_jsonl(
+            backup / "77777777-7777-7777-7777-777777777777.jsonl",
+            [claude_assistant("msg-two", 7)],
+        )
+        tz = timezone.utc
+        usage_calendar.import_history(str(backup), tz, self.cache_path)
+        stats = {}
+        _, _, count, agents = self.parse_result(
+            self.claude_files_by_agent(), tz, cache_path=self.cache_path, stats=stats
+        )
+        self.assertEqual(stats["imported_files"], 2)
+        self.assertEqual(count, 2)
+        self.assertEqual(agents["claude"]["totals"]["input_tokens"], 17)
+
+    def test_claude_dedup_does_not_rewrite_imported_rows(self):
+        backup = self.root / "backup"
+        imported = backup / "88888888-8888-8888-8888-888888888888.jsonl"
+        write_jsonl(imported, [claude_assistant("shared-msg", 10, output_tokens=2)])
+        tz = timezone.utc
+        usage_calendar.import_history(str(backup), tz, self.cache_path)
+        current = self.write_claude_file(
+            ".claude/projects/demo/99999999-9999-9999-9999-999999999999.jsonl",
+            [claude_assistant("shared-msg", 25, output_tokens=4)],
+        )
+        _, _, count, agents = self.parse_result(
+            self.claude_files_by_agent(current), tz, cache_path=self.cache_path
+        )
+        self.assertEqual(count, 1)
+        self.assertEqual(agents["claude"]["totals"]["input_tokens"], 25)
+        self.assertEqual(agents["claude"]["totals"]["output_tokens"], 4)
+        payload = json.loads(Path(self.cache_path).read_text(encoding="utf-8"))
+        row = payload["files"][os.path.abspath(str(imported))]["rows"][0]
+        self.assertEqual(row[3:], [10, 2, 0, 0])
+        self.assertTrue(payload["files"][os.path.abspath(str(imported))]["imported"])
+
+    def test_import_history_cli(self):
+        backup = self.root / "backup"
+        write_jsonl(
+            backup / "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa.jsonl",
+            [claude_assistant("msg-cli", 10)],
+        )
+        search = self.root / "search"
+        search.mkdir()
+        data_home = self.root / "xdg"
+        output = self.root / "out.html"
+        argv = [
+            "claude-usage-calendar.py",
+            "--utc",
+            "--json",
+            "--no-open",
+            "--output",
+            str(output),
+            "--search-path",
+            str(search),
+            "--import-history",
+            str(backup),
+        ]
+        stdout = StringIO()
+        stderr = StringIO()
+        with unittest.mock.patch.dict(os.environ, {"XDG_DATA_HOME": str(data_home)}):
+            with unittest.mock.patch.object(sys, "argv", argv):
+                with (
+                    contextlib.redirect_stdout(stdout),
+                    contextlib.redirect_stderr(stderr),
+                ):
+                    code = usage_calendar.main()
+        text = stdout.getvalue()
+        self.assertEqual(code, 0)
+        self.assertIn(
+            f"Imported 1 session files (1 records) from {backup}",
+            text,
+        )
+        self.assertIn("Including usage from 1 imported session files", text)
+        payload = json.loads(text[text.index("{") :])
+        self.assertEqual(payload["totals"]["input_tokens"], 10)
+        self.assertEqual(payload["unique_messages"], 1)
+        self.assertNotIn(str(Path.home()), stderr.getvalue())
+
+        def expect_error(extra_argv, message):
+            err = StringIO()
+            with unittest.mock.patch.dict(
+                os.environ, {"XDG_DATA_HOME": str(data_home)}
+            ):
+                with unittest.mock.patch.object(sys, "argv", extra_argv):
+                    with (
+                        contextlib.redirect_stdout(StringIO()),
+                        contextlib.redirect_stderr(err),
+                    ):
+                        with self.assertRaises(SystemExit) as caught:
+                            usage_calendar.main()
+            self.assertEqual(caught.exception.code, 2)
+            self.assertIn(message, err.getvalue())
+
+        expect_error(
+            argv + ["--no-cache"],
+            "--import-history cannot be combined with --no-cache",
+        )
+        missing = self.root / "does-not-exist"
+        expect_error(
+            [
+                "claude-usage-calendar.py",
+                "--utc",
+                "--json",
+                "--no-open",
+                "--output",
+                str(output),
+                "--search-path",
+                str(search),
+                "--import-history",
+                str(missing),
+            ],
+            str(missing),
+        )
 
 
 if __name__ == "__main__":

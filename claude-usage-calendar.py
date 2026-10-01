@@ -1344,22 +1344,34 @@ def load_parse_cache(path, tz):
             if not isinstance(row[0], str) or not isinstance(row[1], str):
                 rename_corrupt_parse_cache(path)
                 return {}, True
-        entries[filepath] = {
+        if "imported" in entry and not isinstance(entry["imported"], bool):
+            rename_corrupt_parse_cache(path)
+            return {}, True
+        stored = {
             "agent": agent,
             "st_size": entry["st_size"],
             "st_mtime_ns": entry["st_mtime_ns"],
             "rows": rows,
         }
+        if "imported" in entry:
+            stored["imported"] = entry["imported"]
+        entries[filepath] = stored
     return entries, sha_matches
 
 
 def save_parse_cache(path, tz, entries):
     """Atomically write the parse cache for the current file set."""
+    files = {}
+    for filepath, entry in entries.items():
+        stored = dict(entry)
+        if stored.get("imported") is not True:
+            stored.pop("imported", None)
+        files[filepath] = stored
     payload = {
         "format_version": CACHE_FORMAT_VERSION,
         "script_sha256": parse_cache_script_sha256(),
         "tz": str(tz),
-        "files": entries,
+        "files": files,
     }
     try:
         directory = os.path.dirname(path)
@@ -1382,6 +1394,46 @@ def save_parse_cache(path, tz, entries):
             raise
     except OSError:
         return
+
+
+def import_history(import_path, tz, cache_path):
+    """Parse a backup folder once and store its records as imported cache entries."""
+    files_by_agent = find_session_files(import_path)
+    entries, sha_matches = load_parse_cache(cache_path, tz)
+    if not sha_matches:
+        entries = {
+            path: entry
+            for path, entry in entries.items()
+            if entry.get("imported") is True or not os.path.exists(path)
+        }
+    file_count = 0
+    row_count = 0
+    for agent in AGENT_NAMES:
+        parser = PARSERS[agent]
+        for filepath in files_by_agent.get(agent, []):
+            try:
+                stat_result = os.stat(filepath)
+            except OSError:
+                continue
+            rows = []
+            try:
+                for record in parser(filepath, tz):
+                    rows.append(record_to_cache_row(record))
+            except OSError:
+                continue
+            except (UnicodeError, AttributeError, TypeError, ValueError):
+                pass
+            entries[os.path.abspath(filepath)] = {
+                "agent": agent,
+                "st_size": stat_result.st_size,
+                "st_mtime_ns": stat_result.st_mtime_ns,
+                "rows": rows,
+                "imported": True,
+            }
+            file_count += 1
+            row_count += len(rows)
+    save_parse_cache(cache_path, tz, entries)
+    return file_count, row_count
 
 
 def parse_session_files(files_by_agent, tz, cache_path=None, stats=None):
@@ -1434,6 +1486,7 @@ def parse_session_files(files_by_agent, tz, cache_path=None, stats=None):
     cache_writes = {}
     listed_paths = set()
     historical_files = 0
+    imported_files = 0
 
     for agent in AGENT_NAMES:
         parser = PARSERS[agent]
@@ -1486,20 +1539,39 @@ def parse_session_files(files_by_agent, tz, cache_path=None, stats=None):
                 cache_writes[abs_path] = {**file_meta, "rows": file_rows}
 
     if cache_path is not None:
+        ingested_identities = set()
+        imported_paths = []
         for path, entry in cached_entries.items():
             if path in listed_paths or path in cache_writes:
                 continue
+            if entry.get("imported") is True:
+                imported_paths.append(path)
+                continue
             if os.path.exists(path):
                 continue
-            if cache_file_identity(entry["agent"], path) in current_identities:
+            identity = cache_file_identity(entry["agent"], path)
+            if identity in current_identities:
                 continue
             for row in entry["rows"]:
                 ingest_record(cache_row_to_record(entry["agent"], row))
             cache_writes[path] = entry
             historical_files += 1
+            ingested_identities.add(identity)
+
+        for path in sorted(imported_paths):
+            entry = cached_entries[path]
+            cache_writes[path] = entry
+            identity = cache_file_identity(entry["agent"], path)
+            if identity in current_identities or identity in ingested_identities:
+                continue
+            for row in entry["rows"]:
+                ingest_record(cache_row_to_record(entry["agent"], row))
+            ingested_identities.add(identity)
+            imported_files += 1
 
     if stats is not None:
         stats["historical_files"] = historical_files
+        stats["imported_files"] = imported_files
 
     if cache_path is not None:
         save_parse_cache(cache_path, tz, cache_writes)
@@ -3657,6 +3729,9 @@ Notes:
       ~/.local/share/claude-usage-calendar/ (or XDG_DATA_HOME), one file per
       search path and timezone; the cache keeps usage from deleted session
       files; use --no-cache to report only files still on disk
+    - --import-history PATH adds a backup folder of session files to the usage
+      history once; imported records are kept permanently in the cache for the
+      current search path and timezone.
         """,
     )
     parser.add_argument(
@@ -3691,6 +3766,11 @@ Notes:
         help="Do not read or write the session parse cache",
     )
     parser.add_argument(
+        "--import-history",
+        metavar="PATH",
+        help="Import a backup folder of session files into the usage history once",
+    )
+    parser.add_argument(
         "--json", action="store_true", help="Output JSON data instead of HTML calendar"
     )
 
@@ -3699,6 +3779,16 @@ Notes:
     configure_cost_cli(parser)
 
     args = parser.parse_args()
+
+    import_path = None
+    if args.import_history is not None:
+        if args.no_cache:
+            parser.error("--import-history cannot be combined with --no-cache")
+        import_path = os.path.expanduser(args.import_history)
+        if not os.path.isdir(import_path):
+            parser.error(
+                f"--import-history path is not an existing directory: {import_path}"
+            )
 
     try:
         cost_config = resolve_cost_cli(args)
@@ -3738,6 +3828,23 @@ Notes:
         tz = datetime.now().astimezone().tzinfo
         tz_label = datetime.now().astimezone().strftime("%Z")
 
+    cache_path = None if args.no_cache else default_cache_path(args.search_path, tz)
+    if import_path is not None:
+        imported_file_count, imported_row_count = import_history(
+            import_path, tz, cache_path
+        )
+        if imported_file_count == 0:
+            print(
+                f"No supported session files found in {import_path}",
+                file=sys.stderr,
+            )
+            return 2
+        if not args.quiet:
+            print(
+                f"Imported {imported_file_count} session files"
+                f" ({imported_row_count} records) from {import_path}"
+            )
+
     if not args.quiet:
         print(f"Finding agent session files in {args.search_path}...")
 
@@ -3751,7 +3858,6 @@ Notes:
         print(f"Found {sum(map(len, files_by_agent.values()))} files ({counts})")
         print("Parsing usage data...")
 
-    cache_path = None if args.no_cache else default_cache_path(args.search_path, tz)
     parse_stats = {}
     daily_usage, hourly_usage, msg_count, agents = parse_session_files(
         files_by_agent, tz, cache_path, stats=parse_stats
@@ -3762,6 +3868,11 @@ Notes:
         if historical_files > 0:
             print(
                 f"Including usage from {historical_files} deleted session files"
+            )
+        imported_count = parse_stats.get("imported_files", 0)
+        if imported_count > 0:
+            print(
+                f"Including usage from {imported_count} imported session files"
             )
         print(f"Found {msg_count} unique usage records across {len(daily_usage)} days")
 
