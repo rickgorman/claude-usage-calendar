@@ -3,7 +3,8 @@ import json
 import os
 import tempfile
 import unittest
-from datetime import timezone
+import unittest.mock
+from datetime import timedelta, timezone
 from pathlib import Path
 
 MODULE_PATH = Path(__file__).with_name("claude-usage-calendar.py")
@@ -236,6 +237,339 @@ class MultiAgentUsageTests(unittest.TestCase):
         self.assertIn('data-breakdown="providers"', html)
         self.assertIn("function providerValuesForDate", html)
         self.assertIn("provider-composer", html)
+
+
+class ParseCacheTests(unittest.TestCase):
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp_dir.name)
+        self.cache_dir = Path(self.temp_dir.name) / "cache"
+        self.cache_path = str(self.cache_dir / "parse-cache-v1.json")
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def write_claude_file(self, relative_path, records):
+        path = self.root / relative_path
+        write_jsonl(path, records)
+        return path
+
+    def claude_files_by_agent(self, *paths):
+        return {
+            agent: []
+            for agent in usage_calendar.AGENT_NAMES
+            if agent != "claude"
+        } | {"claude": [str(path) for path in paths]}
+
+    def parse_result(self, files_by_agent, tz, cache_path=None):
+        daily, hourly, count, agents = usage_calendar.parse_session_files(
+            files_by_agent, tz, cache_path
+        )
+        return daily, hourly, count, agents
+
+    def test_default_cache_path_is_keyed_by_search_path_and_timezone(self):
+        utc = timezone.utc
+        other_tz = timezone(timedelta(hours=-8))
+        cache_home = str(self.cache_dir)
+        with unittest.mock.patch.dict(os.environ, {"XDG_CACHE_HOME": cache_home}):
+            first = usage_calendar.default_cache_path("/tmp/sessions-a", utc)
+            same = usage_calendar.default_cache_path("/tmp/sessions-a", utc)
+            other_search = usage_calendar.default_cache_path("/tmp/sessions-b", utc)
+            shifted = usage_calendar.default_cache_path("/tmp/sessions-a", other_tz)
+
+        self.assertEqual(first, same)
+        self.assertNotEqual(first, other_search)
+        self.assertNotEqual(first, shifted)
+        cache_dir = os.path.join(cache_home, "claude-usage-calendar")
+        for path in (first, same, other_search, shifted):
+            self.assertEqual(os.path.dirname(path), cache_dir)
+            self.assertTrue(os.path.basename(path).startswith("parse-cache-v1-"))
+
+    def test_cold_and_warm_runs_match_uncached_baseline(self):
+        path = self.write_claude_file(
+            ".claude/projects/demo/session-a.jsonl",
+            [
+                {
+                    "type": "assistant",
+                    "timestamp": "2026-01-02T10:00:00Z",
+                    "message": {
+                        "id": "msg-1",
+                        "usage": {
+                            "input_tokens": 10,
+                            "output_tokens": 4,
+                            "cache_read_input_tokens": 1,
+                            "cache_creation_input_tokens": 0,
+                        },
+                    },
+                }
+            ],
+        )
+        files = self.claude_files_by_agent(path)
+        tz = timezone.utc
+
+        baseline = self.parse_result(files, tz, cache_path=None)
+        cold = self.parse_result(files, tz, cache_path=self.cache_path)
+        warm = self.parse_result(files, tz, cache_path=self.cache_path)
+
+        self.assertEqual(cold, baseline)
+        self.assertEqual(warm, baseline)
+        self.assertTrue(os.path.isfile(self.cache_path))
+
+    def test_warm_run_skips_parser_for_unchanged_files(self):
+        path = self.write_claude_file(
+            ".claude/projects/demo/session-b.jsonl",
+            [
+                {
+                    "type": "assistant",
+                    "timestamp": "2026-01-02T10:00:00Z",
+                    "message": {
+                        "id": "msg-2",
+                        "usage": {
+                            "input_tokens": 3,
+                            "output_tokens": 1,
+                            "cache_read_input_tokens": 0,
+                            "cache_creation_input_tokens": 0,
+                        },
+                    },
+                }
+            ],
+        )
+        files = self.claude_files_by_agent(path)
+        tz = timezone.utc
+        counts = {"calls": 0}
+        original = usage_calendar.PARSERS["claude"]
+
+        def counting_parser(filepath, tz_info):
+            counts["calls"] += 1
+            yield from original(filepath, tz_info)
+
+        usage_calendar.PARSERS["claude"] = counting_parser
+        try:
+            self.parse_result(files, tz, cache_path=self.cache_path)
+            self.assertEqual(counts["calls"], 1)
+            counts["calls"] = 0
+            self.parse_result(files, tz, cache_path=self.cache_path)
+            self.assertEqual(counts["calls"], 0)
+        finally:
+            usage_calendar.PARSERS["claude"] = original
+
+    def test_modified_file_is_reparsed_and_updates_totals(self):
+        path = self.write_claude_file(
+            ".claude/projects/demo/session-c.jsonl",
+            [
+                {
+                    "type": "assistant",
+                    "timestamp": "2026-01-02T10:00:00Z",
+                    "message": {
+                        "id": "msg-3",
+                        "usage": {
+                            "input_tokens": 5,
+                            "output_tokens": 1,
+                            "cache_read_input_tokens": 0,
+                            "cache_creation_input_tokens": 0,
+                        },
+                    },
+                }
+            ],
+        )
+        files = self.claude_files_by_agent(path)
+        tz = timezone.utc
+
+        _, _, _, agents_before = self.parse_result(
+            files, tz, cache_path=self.cache_path
+        )
+        write_jsonl(
+            path,
+            [
+                {
+                    "type": "assistant",
+                    "timestamp": "2026-01-02T10:00:00Z",
+                    "message": {
+                        "id": "msg-3",
+                        "usage": {
+                            "input_tokens": 50,
+                            "output_tokens": 1,
+                            "cache_read_input_tokens": 0,
+                            "cache_creation_input_tokens": 0,
+                        },
+                    },
+                }
+            ],
+        )
+        _, _, _, agents_after = self.parse_result(
+            files, tz, cache_path=self.cache_path
+        )
+
+        self.assertEqual(
+            agents_before["claude"]["totals"]["input_tokens"],
+            5,
+        )
+        self.assertEqual(
+            agents_after["claude"]["totals"]["input_tokens"],
+            50,
+        )
+
+    def test_corrupt_cache_file_is_ignored(self):
+        path = self.write_claude_file(
+            ".claude/projects/demo/session-d.jsonl",
+            [
+                {
+                    "type": "assistant",
+                    "timestamp": "2026-01-02T10:00:00Z",
+                    "message": {
+                        "id": "msg-4",
+                        "usage": {
+                            "input_tokens": 7,
+                            "output_tokens": 2,
+                            "cache_read_input_tokens": 0,
+                            "cache_creation_input_tokens": 0,
+                        },
+                    },
+                }
+            ],
+        )
+        files = self.claude_files_by_agent(path)
+        tz = timezone.utc
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        Path(self.cache_path).write_text("{not-json", encoding="utf-8")
+
+        daily, hourly, count, agents = self.parse_result(
+            files, tz, cache_path=self.cache_path
+        )
+        self.assertEqual(count, 1)
+        self.assertEqual(agents["claude"]["totals"]["input_tokens"], 7)
+        payload = json.loads(Path(self.cache_path).read_text(encoding="utf-8"))
+        self.assertEqual(payload["format_version"], usage_calendar.CACHE_FORMAT_VERSION)
+
+    def test_different_timezone_invalidates_cache(self):
+        path = self.write_claude_file(
+            ".claude/projects/demo/session-e.jsonl",
+            [
+                {
+                    "type": "assistant",
+                    "timestamp": "2026-01-02T10:00:00Z",
+                    "message": {
+                        "id": "msg-5",
+                        "usage": {
+                            "input_tokens": 9,
+                            "output_tokens": 1,
+                            "cache_read_input_tokens": 0,
+                            "cache_creation_input_tokens": 0,
+                        },
+                    },
+                }
+            ],
+        )
+        files = self.claude_files_by_agent(path)
+        utc = timezone.utc
+        self.parse_result(files, utc, cache_path=self.cache_path)
+        payload = json.loads(Path(self.cache_path).read_text(encoding="utf-8"))
+        self.assertEqual(payload["tz"], str(utc))
+        self.assertEqual(len(usage_calendar.load_parse_cache(self.cache_path, utc)), 1)
+        self.assertEqual(
+            usage_calendar.load_parse_cache(
+                self.cache_path, timezone(timedelta(hours=-8))
+            ),
+            {},
+        )
+
+    def test_removed_file_entry_is_pruned_on_write(self):
+        path_a = self.write_claude_file(
+            ".claude/projects/demo/session-f1.jsonl",
+            [
+                {
+                    "type": "assistant",
+                    "timestamp": "2026-01-02T10:00:00Z",
+                    "message": {
+                        "id": "msg-6",
+                        "usage": {
+                            "input_tokens": 1,
+                            "output_tokens": 0,
+                            "cache_read_input_tokens": 0,
+                            "cache_creation_input_tokens": 0,
+                        },
+                    },
+                }
+            ],
+        )
+        path_b = self.write_claude_file(
+            ".claude/projects/demo/session-f2.jsonl",
+            [
+                {
+                    "type": "assistant",
+                    "timestamp": "2026-01-02T10:00:00Z",
+                    "message": {
+                        "id": "msg-7",
+                        "usage": {
+                            "input_tokens": 2,
+                            "output_tokens": 0,
+                            "cache_read_input_tokens": 0,
+                            "cache_creation_input_tokens": 0,
+                        },
+                    },
+                }
+            ],
+        )
+        tz = timezone.utc
+        both = self.claude_files_by_agent(path_a, path_b)
+        self.parse_result(both, tz, cache_path=self.cache_path)
+        payload = json.loads(Path(self.cache_path).read_text(encoding="utf-8"))
+        self.assertEqual(len(payload["files"]), 2)
+
+        only_a = self.claude_files_by_agent(path_a)
+        self.parse_result(only_a, tz, cache_path=self.cache_path)
+        payload = json.loads(Path(self.cache_path).read_text(encoding="utf-8"))
+        self.assertEqual(len(payload["files"]), 1)
+        self.assertIn(os.path.abspath(str(path_a)), payload["files"])
+        self.assertNotIn(os.path.abspath(str(path_b)), payload["files"])
+
+    def test_claude_cross_file_dedup_matches_warm_and_cold(self):
+        path_a = self.write_claude_file(
+            ".claude/projects/demo/session-g1.jsonl",
+            [
+                {
+                    "type": "assistant",
+                    "timestamp": "2026-01-02T10:00:00Z",
+                    "message": {
+                        "id": "shared-msg",
+                        "usage": {
+                            "input_tokens": 10,
+                            "output_tokens": 1,
+                            "cache_read_input_tokens": 0,
+                            "cache_creation_input_tokens": 0,
+                        },
+                    },
+                }
+            ],
+        )
+        path_b = self.write_claude_file(
+            ".claude/projects/demo/session-g2.jsonl",
+            [
+                {
+                    "type": "assistant",
+                    "timestamp": "2026-01-02T10:00:01Z",
+                    "message": {
+                        "id": "shared-msg",
+                        "usage": {
+                            "input_tokens": 25,
+                            "output_tokens": 4,
+                            "cache_read_input_tokens": 0,
+                            "cache_creation_input_tokens": 0,
+                        },
+                    },
+                }
+            ],
+        )
+        files = self.claude_files_by_agent(path_a, path_b)
+        tz = timezone.utc
+
+        cold = self.parse_result(files, tz, cache_path=None)
+        self.parse_result(files, tz, cache_path=self.cache_path)
+        warm = self.parse_result(files, tz, cache_path=self.cache_path)
+
+        self.assertEqual(warm, cold)
+        self.assertEqual(cold[3]["claude"]["totals"]["input_tokens"], 25)
+        self.assertEqual(cold[3]["claude"]["totals"]["output_tokens"], 4)
 
 
 if __name__ == "__main__":

@@ -91,6 +91,7 @@ class CostIntegrationTests(unittest.TestCase):
                 "--search-path",
                 str(root),
                 "-q",
+                "--no-cache",
                 *arguments,
             ],
             check=False,

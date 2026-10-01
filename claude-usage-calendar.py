@@ -21,9 +21,11 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 from collections import defaultdict
 from collections.abc import Mapping
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 AGENT_NAMES = ("claude", "codex", "grok", "composer")
 AGENT_DISPLAY_NAMES = {
@@ -1216,7 +1218,140 @@ def totals_from_daily(daily_usage):
     return totals
 
 
-def parse_session_files(files_by_agent, tz):
+CACHE_FORMAT_VERSION = 1
+
+
+def default_cache_path(search_path, tz):
+    """Return the on-disk parse cache path for this search path and timezone."""
+    cache_home = os.environ.get("XDG_CACHE_HOME")
+    if cache_home:
+        base = os.path.expanduser(cache_home)
+    else:
+        base = os.path.expanduser("~/.cache")
+    identity = f"{os.path.abspath(os.path.expanduser(search_path))}\0{tz}"
+    key = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:16]
+    return os.path.join(base, "claude-usage-calendar", f"parse-cache-v1-{key}.json")
+
+
+def parse_cache_script_sha256():
+    """Return sha256 hex digest of this script's source bytes."""
+    return hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+
+
+def record_to_cache_row(record):
+    """Serialize a parser record to a compact cache row."""
+    usage = record["usage"]
+    return [
+        record["id"],
+        record["date"],
+        record["hour"],
+        usage["input_tokens"],
+        usage["output_tokens"],
+        usage["cache_read_input_tokens"],
+        usage["cache_creation_input_tokens"],
+    ]
+
+
+def cache_row_to_record(agent, row):
+    """Rebuild a parser record dict from a compact cache row."""
+    record_id, date, hour, input_tokens, output_tokens, cache_read, cache_create = row
+    return {
+        "agent": agent,
+        "id": record_id,
+        "date": date,
+        "hour": hour,
+        "usage": {
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "cache_read_input_tokens": cache_read,
+            "cache_creation_input_tokens": cache_create,
+        },
+        "estimated": agent == "composer",
+    }
+
+
+def load_parse_cache(path, tz):
+    """Load a valid parse cache mapping absolute paths to file entries."""
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+    except (OSError, UnicodeError, json.JSONDecodeError, TypeError, ValueError):
+        return {}
+
+    if not isinstance(payload, dict):
+        return {}
+    if payload.get("format_version") != CACHE_FORMAT_VERSION:
+        return {}
+    if payload.get("script_sha256") != parse_cache_script_sha256():
+        return {}
+    if payload.get("tz") != str(tz):
+        return {}
+
+    files = payload.get("files")
+    if not isinstance(files, dict):
+        return {}
+
+    entries = {}
+    for filepath, entry in files.items():
+        if not isinstance(filepath, str) or not isinstance(entry, dict):
+            return {}
+        agent = entry.get("agent")
+        if agent not in AGENT_NAMES:
+            return {}
+        for key in ("st_size", "st_mtime_ns"):
+            if not isinstance(entry.get(key), int):
+                return {}
+        rows = entry.get("rows")
+        if not isinstance(rows, list):
+            return {}
+        for row in rows:
+            if not isinstance(row, list) or len(row) != 7:
+                return {}
+            if not all(isinstance(value, int) for value in row[2:]):
+                return {}
+            if not isinstance(row[0], str) or not isinstance(row[1], str):
+                return {}
+        entries[filepath] = {
+            "agent": agent,
+            "st_size": entry["st_size"],
+            "st_mtime_ns": entry["st_mtime_ns"],
+            "rows": rows,
+        }
+    return entries
+
+
+def save_parse_cache(path, tz, entries):
+    """Atomically write the parse cache for the current file set."""
+    payload = {
+        "format_version": CACHE_FORMAT_VERSION,
+        "script_sha256": parse_cache_script_sha256(),
+        "tz": str(tz),
+        "files": entries,
+    }
+    try:
+        directory = os.path.dirname(path)
+        os.makedirs(directory, mode=0o700, exist_ok=True)
+        os.chmod(directory, 0o700)
+        fd, temp_path = tempfile.mkstemp(
+            prefix=".parse-cache-", suffix=".json", dir=directory
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                json.dump(payload, handle, separators=(",", ":"))
+            os.chmod(temp_path, 0o600)
+            os.replace(temp_path, path)
+            os.chmod(path, 0o600)
+        except OSError:
+            try:
+                os.unlink(temp_path)
+            except OSError:
+                pass
+            raise
+    except OSError:
+        return
+
+
+def parse_session_files(files_by_agent, tz, cache_path=None):
     """Parse all supported formats into combined and per-agent aggregates."""
     deduplicated_records = {}
     file_counts = {agent: len(files_by_agent.get(agent, [])) for agent in AGENT_NAMES}
@@ -1238,25 +1373,68 @@ def parse_session_files(files_by_agent, tz):
         )
         agent_messages[agent] += 1
 
+    def ingest_record(record):
+        agent = record["agent"]
+        if agent in ("codex", "composer"):
+            aggregate(record)
+            return
+
+        existing = deduplicated_records.get(record["id"])
+        if existing is None:
+            deduplicated_records[record["id"]] = record
+        else:
+            for field in TOKEN_FIELDS:
+                existing["usage"][field] = max(
+                    existing["usage"][field], record["usage"][field]
+                )
+
+    cached_entries = load_parse_cache(cache_path, tz) if cache_path else {}
+    cache_writes = {}
+
     for agent in AGENT_NAMES:
         parser = PARSERS[agent]
         for filepath in files_by_agent.get(agent, []):
+            abs_path = os.path.abspath(filepath)
             try:
-                for record in parser(filepath, tz):
-                    if agent in ("codex", "composer"):
-                        aggregate(record)
-                        continue
-
-                    existing = deduplicated_records.get(record["id"])
-                    if existing is None:
-                        deduplicated_records[record["id"]] = record
-                    else:
-                        for field in TOKEN_FIELDS:
-                            existing["usage"][field] = max(
-                                existing["usage"][field], record["usage"][field]
-                            )
-            except (OSError, UnicodeError, AttributeError, TypeError, ValueError):
+                stat_result = os.stat(filepath)
+            except OSError:
                 continue
+
+            file_meta = {
+                "agent": agent,
+                "st_size": stat_result.st_size,
+                "st_mtime_ns": stat_result.st_mtime_ns,
+            }
+            cached = cached_entries.get(abs_path)
+            file_rows = None
+            if (
+                cached
+                and cached["agent"] == agent
+                and cached["st_size"] == file_meta["st_size"]
+                and cached["st_mtime_ns"] == file_meta["st_mtime_ns"]
+            ):
+                file_rows = cached["rows"]
+
+            if file_rows is None:
+                file_rows = []
+                try:
+                    for record in parser(filepath, tz):
+                        file_rows.append(record_to_cache_row(record))
+                        ingest_record(record)
+                except OSError:
+                    # Read errors may be transient; re-read next run.
+                    continue
+                except (UnicodeError, AttributeError, TypeError, ValueError):
+                    pass
+            else:
+                for row in file_rows:
+                    ingest_record(cache_row_to_record(agent, row))
+
+            if cache_path is not None:
+                cache_writes[abs_path] = {**file_meta, "rows": file_rows}
+
+    if cache_path is not None:
+        save_parse_cache(cache_path, tz, cache_writes)
 
     for record in deduplicated_records.values():
         aggregate(record)
@@ -3407,6 +3585,9 @@ Notes:
       provider-reported, while local transcript token reconstruction is estimated
     - Color intensity on calendar cells reflects relative daily usage
     - Click month cards in yearly view to jump to that month
+    - Parsed session data is cached under
+      ~/.cache/claude-usage-calendar/ (or XDG_CACHE_HOME), one file per
+      search path and timezone; use --no-cache to bypass the cache
         """,
     )
     parser.add_argument(
@@ -3435,6 +3616,11 @@ Notes:
         help="Path to search for supported agent session files (default: ~/)",
     )
     parser.add_argument("--quiet", "-q", action="store_true", help="Suppress output")
+    parser.add_argument(
+        "--no-cache",
+        action="store_true",
+        help="Do not read or write the session parse cache",
+    )
     parser.add_argument(
         "--json", action="store_true", help="Output JSON data instead of HTML calendar"
     )
@@ -3496,8 +3682,9 @@ Notes:
         print(f"Found {sum(map(len, files_by_agent.values()))} files ({counts})")
         print("Parsing usage data...")
 
+    cache_path = None if args.no_cache else default_cache_path(args.search_path, tz)
     daily_usage, hourly_usage, msg_count, agents = parse_session_files(
-        files_by_agent, tz
+        files_by_agent, tz, cache_path
     )
 
     if not args.quiet:

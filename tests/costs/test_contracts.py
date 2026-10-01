@@ -674,6 +674,7 @@ class FrozenArtifactTests(unittest.TestCase):
                 str(SCRIPT),
                 "--json",
                 "-q",
+                "--no-cache",
                 "--utc",
                 "--search-path",
                 directory,
