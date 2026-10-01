@@ -22,6 +22,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 from collections import defaultdict
 from collections.abc import Mapping
 from datetime import datetime, timedelta, timezone
@@ -1223,14 +1224,31 @@ CACHE_FORMAT_VERSION = 1
 
 def default_cache_path(search_path, tz):
     """Return the on-disk parse cache path for this search path and timezone."""
-    cache_home = os.environ.get("XDG_CACHE_HOME")
-    if cache_home:
-        base = os.path.expanduser(cache_home)
+    data_home = os.environ.get("XDG_DATA_HOME")
+    if data_home:
+        base = os.path.expanduser(data_home)
     else:
-        base = os.path.expanduser("~/.cache")
+        base = os.path.expanduser("~/.local/share")
     identity = f"{os.path.abspath(os.path.expanduser(search_path))}\0{tz}"
     key = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:16]
     return os.path.join(base, "claude-usage-calendar", f"parse-cache-v1-{key}.json")
+
+
+def cache_file_identity(agent, filepath):
+    """Return a stable basename-level identity for moved-file cache guards."""
+    basename = os.path.basename(filepath)
+    if agent == "grok":
+        parent = os.path.basename(os.path.dirname(filepath))
+        return (agent, f"{parent}/{basename}")
+    return (agent, basename)
+
+
+def rename_corrupt_parse_cache(path):
+    """Rename an unreadable cache file so history is not silently overwritten."""
+    try:
+        os.rename(path, f"{path}.corrupt-{int(time.time())}")
+    except OSError:
+        pass
 
 
 def parse_cache_script_sha256():
@@ -1271,53 +1289,68 @@ def cache_row_to_record(agent, row):
 
 
 def load_parse_cache(path, tz):
-    """Load a valid parse cache mapping absolute paths to file entries."""
+    """Load parse cache entries and whether the script sha256 still matches."""
+    if not os.path.isfile(path):
+        return {}, True
+
     try:
         with open(path, "r", encoding="utf-8") as handle:
             payload = json.load(handle)
     except (OSError, UnicodeError, json.JSONDecodeError, TypeError, ValueError):
-        return {}
+        rename_corrupt_parse_cache(path)
+        return {}, True
 
     if not isinstance(payload, dict):
-        return {}
+        rename_corrupt_parse_cache(path)
+        return {}, True
     if payload.get("format_version") != CACHE_FORMAT_VERSION:
-        return {}
-    if payload.get("script_sha256") != parse_cache_script_sha256():
-        return {}
+        rename_corrupt_parse_cache(path)
+        return {}, True
     if payload.get("tz") != str(tz):
-        return {}
+        rename_corrupt_parse_cache(path)
+        return {}, True
+
+    sha_matches = payload.get("script_sha256") == parse_cache_script_sha256()
 
     files = payload.get("files")
     if not isinstance(files, dict):
-        return {}
+        rename_corrupt_parse_cache(path)
+        return {}, True
 
     entries = {}
     for filepath, entry in files.items():
         if not isinstance(filepath, str) or not isinstance(entry, dict):
-            return {}
+            rename_corrupt_parse_cache(path)
+            return {}, True
         agent = entry.get("agent")
         if agent not in AGENT_NAMES:
-            return {}
+            rename_corrupt_parse_cache(path)
+            return {}, True
         for key in ("st_size", "st_mtime_ns"):
             if not isinstance(entry.get(key), int):
-                return {}
+                rename_corrupt_parse_cache(path)
+                return {}, True
         rows = entry.get("rows")
         if not isinstance(rows, list):
-            return {}
+            rename_corrupt_parse_cache(path)
+            return {}, True
         for row in rows:
             if not isinstance(row, list) or len(row) != 7:
-                return {}
+                rename_corrupt_parse_cache(path)
+                return {}, True
             if not all(isinstance(value, int) for value in row[2:]):
-                return {}
+                rename_corrupt_parse_cache(path)
+                return {}, True
             if not isinstance(row[0], str) or not isinstance(row[1], str):
-                return {}
+                rename_corrupt_parse_cache(path)
+                return {}, True
         entries[filepath] = {
             "agent": agent,
             "st_size": entry["st_size"],
             "st_mtime_ns": entry["st_mtime_ns"],
             "rows": rows,
         }
-    return entries
+    return entries, sha_matches
 
 
 def save_parse_cache(path, tz, entries):
@@ -1351,7 +1384,7 @@ def save_parse_cache(path, tz, entries):
         return
 
 
-def parse_session_files(files_by_agent, tz, cache_path=None):
+def parse_session_files(files_by_agent, tz, cache_path=None, stats=None):
     """Parse all supported formats into combined and per-agent aggregates."""
     deduplicated_records = {}
     file_counts = {agent: len(files_by_agent.get(agent, [])) for agent in AGENT_NAMES}
@@ -1388,16 +1421,34 @@ def parse_session_files(files_by_agent, tz, cache_path=None):
                     existing["usage"][field], record["usage"][field]
                 )
 
-    cached_entries = load_parse_cache(cache_path, tz) if cache_path else {}
+    cached_entries = {}
+    sha_matches = True
+    if cache_path:
+        cached_entries, sha_matches = load_parse_cache(cache_path, tz)
+
+    current_identities = set()
+    for agent in AGENT_NAMES:
+        for filepath in files_by_agent.get(agent, []):
+            current_identities.add(cache_file_identity(agent, filepath))
+
     cache_writes = {}
+    listed_paths = set()
+    historical_files = 0
 
     for agent in AGENT_NAMES:
         parser = PARSERS[agent]
         for filepath in files_by_agent.get(agent, []):
             abs_path = os.path.abspath(filepath)
+            listed_paths.add(abs_path)
+            cached = cached_entries.get(abs_path)
             try:
                 stat_result = os.stat(filepath)
             except OSError:
+                if cached is not None:
+                    for row in cached["rows"]:
+                        ingest_record(cache_row_to_record(cached["agent"], row))
+                    if cache_path is not None:
+                        cache_writes[abs_path] = cached
                 continue
 
             file_meta = {
@@ -1405,10 +1456,10 @@ def parse_session_files(files_by_agent, tz, cache_path=None):
                 "st_size": stat_result.st_size,
                 "st_mtime_ns": stat_result.st_mtime_ns,
             }
-            cached = cached_entries.get(abs_path)
             file_rows = None
             if (
-                cached
+                sha_matches
+                and cached is not None
                 and cached["agent"] == agent
                 and cached["st_size"] == file_meta["st_size"]
                 and cached["st_mtime_ns"] == file_meta["st_mtime_ns"]
@@ -1422,7 +1473,8 @@ def parse_session_files(files_by_agent, tz, cache_path=None):
                         file_rows.append(record_to_cache_row(record))
                         ingest_record(record)
                 except OSError:
-                    # Read errors may be transient; re-read next run.
+                    if cached is not None and cache_path is not None:
+                        cache_writes[abs_path] = cached
                     continue
                 except (UnicodeError, AttributeError, TypeError, ValueError):
                     pass
@@ -1430,8 +1482,24 @@ def parse_session_files(files_by_agent, tz, cache_path=None):
                 for row in file_rows:
                     ingest_record(cache_row_to_record(agent, row))
 
-            if cache_path is not None:
+            if cache_path is not None and abs_path not in cache_writes:
                 cache_writes[abs_path] = {**file_meta, "rows": file_rows}
+
+    if cache_path is not None:
+        for path, entry in cached_entries.items():
+            if path in listed_paths or path in cache_writes:
+                continue
+            if os.path.exists(path):
+                continue
+            if cache_file_identity(entry["agent"], path) in current_identities:
+                continue
+            for row in entry["rows"]:
+                ingest_record(cache_row_to_record(entry["agent"], row))
+            cache_writes[path] = entry
+            historical_files += 1
+
+    if stats is not None:
+        stats["historical_files"] = historical_files
 
     if cache_path is not None:
         save_parse_cache(cache_path, tz, cache_writes)
@@ -3586,8 +3654,9 @@ Notes:
     - Color intensity on calendar cells reflects relative daily usage
     - Click month cards in yearly view to jump to that month
     - Parsed session data is cached under
-      ~/.cache/claude-usage-calendar/ (or XDG_CACHE_HOME), one file per
-      search path and timezone; use --no-cache to bypass the cache
+      ~/.local/share/claude-usage-calendar/ (or XDG_DATA_HOME), one file per
+      search path and timezone; the cache keeps usage from deleted session
+      files; use --no-cache to report only files still on disk
         """,
     )
     parser.add_argument(
@@ -3683,11 +3752,17 @@ Notes:
         print("Parsing usage data...")
 
     cache_path = None if args.no_cache else default_cache_path(args.search_path, tz)
+    parse_stats = {}
     daily_usage, hourly_usage, msg_count, agents = parse_session_files(
-        files_by_agent, tz, cache_path
+        files_by_agent, tz, cache_path, stats=parse_stats
     )
 
     if not args.quiet:
+        historical_files = parse_stats.get("historical_files", 0)
+        if historical_files > 0:
+            print(
+                f"Including usage from {historical_files} deleted session files"
+            )
         print(f"Found {msg_count} unique usage records across {len(daily_usage)} days")
 
     # Build the canonical data structure
